@@ -186,7 +186,7 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 func (T *conn) readLineBytes() (b []byte, err error) {
 
   	if d := T.server.ReadTimeout; d != 0 {
-  		T.rwc.SetReadDeadline(time.Now().Add(d))
+  		T.rwc.SetReadDeadline(time.Now().Add(time.Duration(d) * time.Millisecond))
   	}
 
   	//设置读取限制大小
