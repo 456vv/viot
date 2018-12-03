@@ -198,7 +198,7 @@ func Test_conn_serve1(t *testing.T){
 		netConn, err := net.Dial("tcp", laddr)
 		n, err := netConn.Write(b)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("写入错误：%v",err)
 		}
 		if n != len(b) {
 			t.Fatalf("预测 %v, 发送 %v", len(b), n)
@@ -207,10 +207,10 @@ func Test_conn_serve1(t *testing.T){
 		var riot ResponseIOT
 		err = json.NewDecoder(netConn).Decode(&riot)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("读取错误：%v",err)
 		}
 		if riot.Status != 200 {
-			t.Fatal(riot)
+			t.Fatalf("返回状态是：%d", riot.Status)
 		}
 		netConn.Close()
 	}()
