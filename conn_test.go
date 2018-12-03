@@ -373,7 +373,7 @@ func Test_conn_serve2(t *testing.T){
 	//	t.Log(c)
 //	}
 	
-	time.Sleep(time.Second)
+	time.Sleep(time.Second*5)
 
 }
 
