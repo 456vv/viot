@@ -327,6 +327,7 @@ func Test_conn_serve2(t *testing.T){
 		
 		//给5秒
 		//time.Sleep(time.Second*5)
+		time.Sleep(time.Second*2)
 		netConn.Close()
 	}(t)
 	
