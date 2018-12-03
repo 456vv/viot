@@ -123,8 +123,8 @@ func Test_conn_readRequest(t *testing.T){
 		
 		c := &conn{
 			server: &Server{
-			//	ReadTimeout: 10000,
-				WriteTimeout: 10000,
+				ReadTimeout: time.Second*1,
+				WriteTimeout: time.Second*1,
 			},
 			rwc: netConn,
 		}
