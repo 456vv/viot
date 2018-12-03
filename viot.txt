@@ -1,0 +1,405 @@
+var.go============================================================================================================================================================
+
+const DefaultLineBytes = 1 << 20 										// 1 MB
+>const maxInt32 = 1<<32 - 1												// 服务器和传输的字节限制读取器的有效“无限”值。
+
+var (
+  	ErrBodyNotAllowed 	= verror.TrackError("请求方法或状态码是不允许")
+	ErrGetBodyed		= verror.TrackError("不支持重复读取body")
+  	ErrHijacked 		= verror.TrackError("连接已经被劫持")
+  	ErrLaunched			= verror.TrackError("连接正在等待主动请求的响应")
+	ErrAbortHandler 	= verror.TrackError("中止处理")
+	ErrServerClosed 	= verror.TrackError("服务器已经关闭")
+	ErrDoned			= verror.TrackError("已经完成")
+	ErrConnClose		= verror.TrackError("设备连接已经关闭")
+	ErrReqUnavailable	= verror.TrackError("请求不可用")
+)
+>var (
+>	errTooLarge 		= verror.TrackError("要求数据过大")
+>)
+>var shutdownPollInterval = 500 * time.Millisecond                       // 检测服务器下线时间间隔
+>var aLongTimeAgo = time.Unix(1, 0)										// 是一个非零时间，远在过去，用于立即取消网络操作。
+>var methods	= []string{"GET","POST","HEAD","PUT","DELETE","OPTIONS"}	// 方法集
+
+
+tcpKeepAliveListener.go============================================================================================================================================================
+>type tcpKeepAliveListener struct {								// tcp长连接
+>	*net.TCPListener													// TCP对象
+>}
+>	func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) 	// 允许连接
+server.go============================================================================================================================================================
+
+var (
+    ServerContextKey = &contextKey{"iot-server"}                       	// 服务器
+    LocalAddrContextKey = &contextKey{"local-addr"}                     // 监听地址
+)
+
+type Handler interface {                                        // 处理函数接口
+    ServeIOT(ResponseWriter, *Request)                                  // 处理
+}
+
+type HandlerFunc func(ResponseWriter, *Request)                 // 处理函数
+    func (T HandlerFunc) ServeIOT(w ResponseWriter, r *Request)         // 函数
+
+>type serverHandler struct {                                     //服务处理函数，在服务器没有设置Handler字段，为了保证不出错。
+>    srv *Server                                                         //服务器
+>}
+>    func (T serverHandler) ServeIOT(rw ResponseWriter, req *Request)    // 函数
+
+type Server struct {                                            // 服务器
+    Addr            string                                              // 如果空，TCP监听的地址是，“:http”
+    Handler         Handler                                             // 如果nil，处理器调用，http.DefaultServeMux
+    ConnState       func(net.Conn, ConnState)                           // 每一个连接跟踪
+    ConnHook        func(net.Conn) (net.Conn, error)                    // 连接钩子
+    HandlerRequest  func(b io.Reader) (req *Request, err error)     	// 处理请求
+    HandlerResponse	func(b io.Reader) (res *Response, err error)		// 处理响应
+    ErrorLog        *log.Logger                                         // 错误？默认是 os.Stderr
+    ReadTimeout     time.Duration                                       // 求读取之前，最长期限超时
+    WriteTimeout    time.Duration                                       // 响应写入之前，最大持续时间超时
+    IdleTimeout     time.Duration                                       // 空闲时间，等待用户重新请求
+    TLSNextProto    map[string]func(*Server, *tls.Conn, Handler)        // TLS劫持，["v3"]=function(自身, TLS连接, Handler)
+    MaxLineBytes    int                                                 // 限制读取行数据大小
+
+>    disableKeepAlives int32                                             // 禁止长连接
+>    inShutdown        int32                                             // 判断服务器是否已经下线
+
+
+>    mu          sync.Mutex                                              // 锁
+>    listeners   map[net.Listener]struct{}                               // 监听集
+>    activeConn  map[*conn]struct{}                                      // 连接集
+>    doneChan    chan struct{}                                           // 服务关闭
+>    onShutdown  []func()                                                // 服务器下线事件
+}
+
+>    func (T *Server) maxLineBytes() int                                 // 行数据大小
+>    func (T *Server) createDoneChan() chan struct{}                     // 创建通道
+>    func (T *Server) getDoneChan() <- chan struct{}                     // 读取通道
+>    func (T *Server) closeDoneChan()                                    // 关闭通道
+>    func (T *Server) trackListener(ln net.Listener, add bool)           // 记录监听
+>    func (T *Server) closeListeners() error                             // 删除监听
+>    func (T *Server) trackConn(c *conn, add bool)                       // 记录连接
+>    func (T *Server) closeConns() error                                 // 关闭连接
+	func (T *Server) ListenAndServe() error							// 监听并服务
+	func (T *Server) Serve(l net.Listener) error                        // 服务器监听
+	func (T *Server) Close() error                                      // 关闭服务器
+>    func (T *Server) idleTimeout() time.Duration                        // 空闲超时时间，如果没有设置，则使用读取时间
+	func (T *Server) Shutdown(ctx context.Context) error                // 关闭服务器，等待连接完成
+	func (T *Server) RegisterOnShutdown(f func())                       // 注册更新事件
+	func (T *Server) SetKeepAlivesEnabled(v bool)                       // 设置长连接开启
+>    func (T *Server) logf(format string, args ...interface{})           // 日志
+>    func (T *Server) doKeepAlives() bool                                // 判断服务器是否支持长连接
+>    func (T *Server) shuttingDown() bool                                // 判断服务器下线
+>    func (T *Server) closeIdleConns() bool                              // 关闭空闲连接
+
+header.go============================================================================================================================================================
+
+type Header map[string]string                                   // 标头
+    func (h Header) Set(key, value string)                              // 设置
+    func (h Header) Get(key string) string                              // 读取
+    func (h Header) Del(key string)                                     // 删除
+	func (h Header) clone() Header										// 克隆
+	
+func.go============================================================================================================================================================
+
+
+>func strSliceContains(ss []string, t string) bool                       // 在切片中查找
+>func validMethod(method string) bool                                    // 判断方法
+>func validNPN(proto string) bool                                        // 判断协议
+func ParseIOTVersion(vers string) (major, minor int, ok bool)           // 解析IOT请求版本
+>var textprotoReaderPool sync.Pool
+>func newTextprotoReader(br *bufio.Reader) *textproto.Reader             // 回收文本格式读取
+>func putTextprotoReader(r *textproto.Reader)                            // 提取文本格式读取
+func ReadRequest(b io.Reader) (req *Request, err error)				// 读取请求数据
+>func readRequest(b io.Reader) (req *Request, err error)             	// 读取请求数据
+func ReadResponse(r *bufio.Reader, req *Request) (res *Response, err error)	// 读取响应数据
+>func readResponse(b io.Reader) (res *Response, err error) 				// 读取响应数据
+>func shouldClose(major, minor int, header Header) bool                  // 应该关闭，判断请求协议是否支持长连接
+>var (
+>    bufioReaderPool   sync.Pool
+>    bufioWriter2kPool sync.Pool
+>    bufioWriter4kPool sync.Pool
+>)
+>func newBufioReader(r io.Reader) *bufio.Reader                          // 提取读取缓冲
+>func putBufioReader(br *bufio.Reader)                                   // 回收读取缓冲
+>func bufioWriterPool(size int) *sync.Pool                               // 分配写入缓冲
+>func putBufioWriter(bw *bufio.Writer)                                   // 回收写入缓冲
+>func newBufioWriterSize(w io.Writer, size int) *bufio.Writer            // 提取写入缓冲
+>func bodyAllowedForStatus(status int) bool                              // 判断状态码
+>func hasToken(v, token string) bool                                     // 判断toKen
+>func isTokenBoundary(b byte) bool                                       // 是无效符号
+>func parseBasicAuth(auth string) (username, password string, ok bool)   // 解析基本验证
+>func basicAuth(username, password string) string                        // 设置基本验证
+func Nonce() (nonce string, err error)									// 生成编号
+>func isCommonNetReadError(err error) bool								// 是网络读取失败
+func Error(w ResponseWriter, err string, code int)						// 快速设置错误
+
+viot.go============================================================================================================================================================
+
+>type contextKey struct {                                        // 上下文的Ken，在请求中可以使用
+>    name string                                                         // 主键
+>}
+>    func (T *contextKey) String() string                                // 字符
+>type badRequestError string                                     // 请求失败
+>    func (e badRequestError) Error() string                             // 错误字符
+>type atomicBool int32                                           // 原子设置
+>    func (b *atomicBool) isSet() bool                                   // 判断设置
+>    func (b *atomicBool) setTrue() bool                                 // 设置true
+>	func (T *atomicBool) setFalse() bool								// 设置false
+>type noBody struct{}                                            // 空的请求解码
+>    func (T *noBody) Decode(i interface{}) error                        // 解码
+
+request.go============================================================================================================================================================
+>type requestIOTBody struct{										// iot接收或发送数据格式带BODY
+>	*RequestIOT															// 常用格式
+>	Body 	interface{} 		`json:"body,omitempty"`					// 主体
+>}
+
+type RequestIOT struct{											// iot接收或发送数据格式
+	Nonce 	string				`json:"nonce"`//-,omitempty,string,number,boolean
+	Proto 	string				`json:"proto"`
+	Method 	string				`json:"method"`
+	Path 	string				`json:"path"`
+	Home	string				`json:"home"`
+	Header 	Header				`json:"header"`
+>	body 	interface{}
+}
+	func (T *RequestIOT) SetBody(i interface{})								// 设置主体
+	func (T *RequestIOT) GetBody() interface{}								// 读取主体
+	func (T *RequestIOT) Marshal() ([]byte, error)							// 编码
+	func (T *RequestIOT) Unmarshal(data []byte) error 						// 解码
+
+>type reqIOTBody struct{
+>	Body interface{}			`json:"body"`
+>}
+
+type Request struct {                                               // 请求
+    nonce       int64                                                       // 编号
+    Home        string                                                      // 身份
+    Method      string                                                      // 方法
+    RequestURI  string                                                      // 请求URL
+    URL         *url.URL                                                    // 路径
+    Proto       string                                                      // 协议
+    ProtoMajor  int                                                         // 协议大版号
+    ProtoMinor  int                                                         // 协议小版号
+    Header      Header                                                      // 标头
+    TLS         *tls.ConnectionState                                        // TLS
+    RemoteAddr string                                                       // 远程IP地址
+    Close       bool                                                        // 客户要求一次性连接
+
+>	bodyw		interface{}													// 写入的Body数据
+>	datab		*bytes.Buffer												// 请求的数据(缓存让GetBody调用)
+>	getbodyed	bool														// 判断读取主体
+>	ctx			context.Context												// 上下文
+>  	cancelCtx   context.CancelFunc											// 上下文函数
+
+}
+
+	func (T *Request) GetNonce() string										// 读取编号
+	func (T *Request) GetBody(i interface{}) error							// 读取主体
+	func (T *Request) SetBody(i interface{}) error							// 设置主体
+    func (T *Request) ProtoAtLeast(major, minor int) bool                   // 判断版本号
+>	func (T *Request) wantsClose() bool                                     // 应该关闭
+	func (T *Request) Context() context.Context                             // 读取上下文
+	func (T *Request) WithContext(ctx context.Context) *Request             // 替换上下文
+	func (T *Request) GetBasicAuth() (username, password string, ok bool)   // 基本验证
+	func (T *Request) SetBasicAuth(username, password string)               // 设置基本验证
+	func (T *Request) GetTokenAuth() (token string, ok bool)                // token验证
+	func (T *Request) SetTokenAuth(token string)                            // 设置token验证
+	func (T *Request) RequestIOT(nonce string) (riot *RequestIOT, err error)// 请求，发往设备的请求
+
+conn.go============================================================================================================================================================
+
+>var errTooLarge = errors.New("viot: request too large")                     // 请求太长
+var ErrAbortHandler = errors.New("viot: abort Handler")                     // 错误标头
+>const rstAvoidanceDelay = 500 * time.Millisecond                            // 关闭后，等待FIN
+
+>type initNPNRequest struct {                                        // NPN请求
+>    srv *Server                                                             // 上级
+>    c *tls.Conn                                                             // 连接
+>}
+>    func (T initNPNRequest) ServeIOT(rw ResponseWriter, req *Request)       // 服务接口
+>type closeWriter interface {                                        // 关闭写入接口
+>    CloseWrite() error                                                      // 关闭写入
+>}
+>var _ closeWriter = (*net.TCPConn)(nil)                                     // 断言
+>
+>type ConnState int                                                  // 连接状态
+>const (
+>    StateNew ConnState = iota                                               // 新连接
+>    StateActive                                                             // 处理
+>    StateIdle                                                               // 空闲
+>    StateHijacked                                                           // 被劫持
+>    StateClosed                                                             // 关闭
+>)
+>    func (c ConnState) String() string                                      // 字符
+>var stateName = map[ConnState]string{                                       // 可打印的连接状态
+>    StateNew:      "new",
+>    StateActive:   "active",
+>    StateIdle:     "idle",
+>    StateHijacked: "hijacked",
+>    StateClosed:   "closed",
+>}
+
+>var connStateInterface = [...]interface{}{                          // 连接状态接口
+>    StateNew:      StateNew,                                                // 新连接
+>    StateActive:   StateActive,                                             // 活动
+>    StateIdle:     StateIdle,                                               // 空闲
+>    StateHijacked: StateHijacked,                                           // 劫持
+>    StateClosed:   StateClosed,                                             // 关闭
+>}
+
+>type conn struct {                                                  // 连接
+>    server *Server                                                          // 上级，服务器
+>    rwc net.Conn                                                            // 上级，原始连接
+>    cancelCtx context.CancelFunc                                            // 取消上下文
+>    remoteAddr string                                                       // 远程IP
+>    tlsState *tls.ConnectionState                                           // TLS状态
+>    werr error                                                              // 写错误
+>    r *connReader                                                           // 读取
+>    bufr *bufio.Reader                                                      // 读缓冲
+>    bufw *bufio.Writer                                                      // 写缓冲
+>    curReq atomic.Value                                                     // 当前请求
+>    curRes atomic.Value                                                     // 当前响应
+>    curState atomic.Value                                                   // 当前的连接状态
+>    mu sync.Mutex                                                           // 锁
+>    hijackedv bool                                                          // 劫持
+>}
+>    func (T *conn) hijackLocked() (rwc net.Conn, buf *bufio.ReadWriter, err error)  // 劫持连接
+>    func (T *conn) inLaunch() bool											// 有发射数量
+>    func (T *conn) RoundTrip(req *Request) (resp *Response, err error)		// 单一的请求
+>	func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Response, err error)	// 单一的请求（上下文）
+>	func (T *conn) readLineBytes() (b []byte, err error)					// 读取一行数据
+>	func (T *conn) readResponse(ctx context.Context, br io.Reader) (res *Response, err error) 	// 解析响应
+>    func (T *conn) readRequest(ctx context.Context, br io.Reader) (req *Request, err error)  	// 解析请求
+>    func (T *conn) serve(ctx context.Context)                               // 服务
+>    func (T *conn) setState(nc net.Conn, state ConnState)                   // 设置连接状态
+>    func (T *conn) finalFlush()                                             // 回收缓冲对象
+>    func (T *conn) closeWriteAndWait()                                      // 关闭并写入
+>    func (T *conn) close()                                                  // 关闭连接
+
+>type checkConnErrorWriter struct {                                  // 检查写入错误
+>    c *conn                                                                 // 上级
+>}
+>    func (T checkConnErrorWriter) Write(p []byte) (n int, err error)        // 写入
+
+>type connReader struct {                                            // 连接读取
+>    conn *conn                                                              // 上级
+>
+>    mu      sync.Mutex                                                      // 锁
+>    hasByte bool                                                            // 检测有数据
+>    byteBuf [1]byte                                                         // 第一个数据，检测时候得到一个数据
+>    cond    *sync.Cond                                                      // 组
+>    inRead  bool                                                            // 正在读取
+>    aborted bool                                                            // 结束
+>    remain  int                                                             // 剩下
+>}
+>
+>    func (T *connReader) lock()                                             // 锁，条件等待
+>    func (T *connReader) unlock() {T.mu.Unlock()}                           // 解锁
+>    func (T *connReader) setReadLimit(remain int)                           // 设置读取限制
+>    func (T *connReader) setInfiniteReadLimit()                             // 恢复默认读取限制
+>    func (T *connReader) hitReadLimit() bool                                // 超出读取限制
+>    func (T *connReader) startBackgroundRead()                              // 开始后台读取
+>    func (T *connReader) backgroundRead()                                   // 后台读取
+>    func (T *connReader) abortPendingRead()                                 // 中止等待读取
+>    func (T *connReader) handleReadError(err error)                         // 读取错误，需要取消所有下上文
+>    func (T *connReader) closeNotify()                                      // 连接关闭通知
+>    func (T *connReader) Read(p []byte) (n int, err error)                  // 读取数据
+
+
+response.go============================================================================================================================================================
+type ResponseIOT struct{
+	Nonce 	string						`json:"nonce"`
+	Status	int							`json:"status"`
+	Header 	Header						`json:"header"`
+	Body 	interface{}					`json:"body,omitempty"`
+}
+
+type Response struct{												// 响应
+    Status     	int															// 状态码
+	Header 		Header														// 标头
+	Body		interface{}													// 主体
+	Close		bool														// 服务器关闭连接
+	Request		*Request													// 请求
+	RemoteAddr	string														// 远程IP
+	
+>	nonce 		string														// 编码
+}
+	func (T *Response) SetNonce(n string)									// 读取编号
+	func (T *Response) WriteTo(w ResponseWriter)							// 写入到
+	func (T *Response) Write(w io.Writer) error								// 写入w
+	func (T *Response) ResponseIOT(nonce string) (riot *ResponseIOT, err error)// 响应，接收设备的响应
+responseWrite.go============================================================================================================================================================
+
+type ResponseWriter interface {                                     // 响应写入接口
+    Header() Header                                                         // 标头
+    Status(int)                                                             // 状态
+    SetBody(interface{}) error                                              // 主体
+}
+type Hijacker interface {                                           // 劫持接口
+    Hijack() (net.Conn, *bufio.ReadWriter, error)                           // 劫持
+}
+type CloseNotifier interface {                                      // 连接关闭通知接口
+    CloseNotify() <-chan bool                                               // 关闭通知
+}
+type Launcher interface{}{											// 发射，服务器使用当前连接作为客户端给智能设置发送信息
+    Launch() (tr RoundTripper, err error)									// 发射
+}
+>type responseWrite struct{                                          // 响应
+>    conn                *conn                                               // 上级
+>    req                 *Request                                            // 上级
+>    closeNotifyCh       chan bool                                           // 收到数据，处理还没结束的时候。客户端又发来请求。则取消现有的请求，接受新的请求
+>    didCloseNotify      int32                                               // atomic (only 0->1 winner should send)
+>
+>    wroteStatus         bool                                                // 状态写入
+>    status              int                                                 // 状态码
+>
+>    cw                  chunkWriter                                         // body数据和组装数据
+>
+>    header              Header                                              // 标头
+>
+>    closeAfterReply     bool                                                // 服务端设置不关闭连接
+>
+>    handlerDone         atomicBool                                          // 判断本次响应是否已经完成
+>    
+>   	isWrite				bool												// 原样数据写入
+>}
+>	func (T *responseWrite) Write(b []byte) (int, error)					// 写入字节串
+>   func (T *responseWrite) Status(code int)                                // 写入状态码
+>   func (T *responseWrite) bodyAllowed() bool                              // 状态码有效性
+>   func (T *responseWrite) default200Status()                              // 默认状态码
+>   func (T *responseWrite) Header() Header                                 // 写入标头
+>   func (T *responseWrite) SetBody(data interface{}) error                 // 写入数据
+>   func (T *responseWrite) closeNotify()                                   // 设置关闭通知
+>   func (T *responseWrite) CloseNotify() <-chan bool                       // 读取关闭通知
+>   func (T *responseWrite) done()                                          // 完成
+>   func (T *responseWrite) Hijack() (rwc net.Conn, buf *bufio.ReadWriter, err error)    // 劫持连接
+>   func (T *responseWrite) Launch() (tr RoundTripper, err error)           // 发射
+
+chunkWriter.go============================================================================================================================================================
+>type chunkWriter struct {                                           // 块写入
+>    res             *response                                               // 上级
+>    data            *vmap.Map                                               // 数据结构
+>    ct              string                                                  // body 类型
+>    body            interface{}                                             // body 数据
+>}
+>    func (T *chunkWriter) generateResponse()                                // 生成响应
+>    func (T *chunkWriter) ctype(data interface{})                           // 内容类型
+>    func (T *chunkWriter) SetBody(data interface{}) error                   // body内容写入
+>    func (T *chunkWriter) done() error                                      // 无body内容写入
+
+transport.go============================================================================================================================================================
+
+type RoundTripper interface {                                       // 执行一个单一的HTTP事务
+    RoundTrip(*Request) (*Response, error)                                  // 单一的HTTP请求
+	RoundTripContext(ctx context.Context, req *Request) (resp *Response, err error)	// 单一的HTTP请求(上下文)
+}
+
+route.go============================================================================================================================================================
+
+type Route struct{
+	HandlerError	func(w ResponseWriter, r *Request)						// 处理错误的请求
+>    rt       		*sync.Map                                     			// 路由表 map[string]func(w ResponseWriter, r *Request)
+}
+	func (T *Route) HandleFunc(url string,  handler func(w ResponseWriter, r *Request))	// 增加函数
+	func (T *Route) ServeIOT(w ResponseWriter, r *Request)					// 调用函数
