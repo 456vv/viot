@@ -177,7 +177,7 @@ func Test_conn_readRequest(t *testing.T){
 		c.Close()
 		netConn.Close()
 //	}
-	time.Sleep(time.Second)
+	time.Sleep(time.Second*5)
 
 }
 
@@ -259,7 +259,7 @@ func Test_conn_serve1(t *testing.T){
 		
 	//	t.Log(c)
 //	}
-	time.Sleep(time.Second)
+	time.Sleep(time.Second*5)
 
 }
 
