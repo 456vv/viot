@@ -112,6 +112,7 @@ func Test_conn_readRequest(t *testing.T){
 		if n != len(b) {
 			t.Fatalf("预测 %v, 发送 %v", len(b), n)
 		}
+		time.Sleep(time.Second)//有些系统响应慢，需要等一秒吧。
 		netConn.Close()
 	}()
 	
@@ -327,6 +328,7 @@ func Test_conn_serve2(t *testing.T){
 		
 		//给5秒
 		//time.Sleep(time.Second*5)
+		time.Sleep(time.Second)//有些系统响应慢，需要等一秒吧。
 		netConn.Close()
 	}(t)
 	
