@@ -29,7 +29,7 @@ func Test_conn_readLineBytes(t *testing.T){
 	for _, vs := range ss {
 		s = fmt.Sprintf("%s%s\n", s, vs)
 	}
-	var exit = make(chan bool)
+
 	go func(){
 		time.Sleep(time.Second)
 		laddr := l.Addr().String()
@@ -46,7 +46,6 @@ func Test_conn_readLineBytes(t *testing.T){
 			t.Fatalf("预测 %v, 发送 %v", len(b), n)
 		}
 		io.Copy(ioutil.Discard, netConn)
-		<-exit
 		netConn.Close()
 	}()
 
@@ -85,8 +84,8 @@ func Test_conn_readLineBytes(t *testing.T){
 		}
 		c.Close()
 		netConn.Close()
-		exit<-true
 //	}
+	time.Sleep(time.Second)
 }
 
 
@@ -178,6 +177,7 @@ func Test_conn_readRequest(t *testing.T){
 		c.Close()
 		netConn.Close()
 //	}
+	time.Sleep(time.Second)
 
 }
 
@@ -212,7 +212,6 @@ func Test_conn_serve1(t *testing.T){
 		if riot.Status != 200 {
 			t.Fatal(riot)
 		}
-		time.Sleep(time.Second*2)
 		netConn.Close()
 	}()
 	
@@ -260,7 +259,7 @@ func Test_conn_serve1(t *testing.T){
 		
 	//	t.Log(c)
 //	}
-
+	time.Sleep(time.Second)
 
 }
 
@@ -327,7 +326,6 @@ func Test_conn_serve2(t *testing.T){
 		
 		//给5秒
 		//time.Sleep(time.Second*5)
-		time.Sleep(time.Second*2)
 		netConn.Close()
 	}(t)
 	
@@ -374,7 +372,8 @@ func Test_conn_serve2(t *testing.T){
 		
 	//	t.Log(c)
 //	}
-	time.Sleep(time.Second*5)
+	
+	time.Sleep(time.Second)
 
 }
 
