@@ -223,8 +223,8 @@ func Test_conn_serve1(t *testing.T){
 		
 		c := &conn{
 			server: &Server{
-				ReadTimeout: 1000,
-				WriteTimeout: 1000,
+				ReadTimeout: 0,
+				WriteTimeout: 0,
 			},
 			rwc: netConn,
 		}
