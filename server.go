@@ -307,8 +307,6 @@ func (T *Server) SetKeepAlivesEnabled(v bool) {
 func (T *Server) logf(format string, args ...interface{}) {
 	if T.ErrorLog != nil {
 		T.ErrorLog.Printf(format, args...)
-	} else {
-		log.Printf(format, args...)
 	}
 }
 

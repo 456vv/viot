@@ -273,11 +273,11 @@ func (T *conn) serve(ctx context.Context) {
 			T.server.logf("viot: 服务器意外错误 %v: %v\n%s", T.remoteAddr, err, buf)
 		}
 		if !T.hijackedv.isTrue() {
-			T.server.logf("viot: 远程IP(%s)断开网络\n", T.remoteAddr)
+			//T.server.logf("viot: 远程IP(%s)断开网络\n", T.remoteAddr)
 			T.Close()
 		}
 	}()
-	T.server.logf("viot: 远程IP(%s)连接网络\n", T.remoteAddr)
+	//T.server.logf("viot: 远程IP(%s)连接网络\n", T.remoteAddr)
 
 //	if tlsConn, ok := T.rwc.(*tls.Conn); ok {
 //		//这里等验证，暂时用不上
