@@ -1,7 +1,8 @@
-github.com/456vv/verror v1.0.0/go.mod h1:bSnTPUFRHtX0q2zlecuhNAD3NfOk609KNfFcid+PGQc=
-github.com/456vv/vmap/v2 v2.0.0 h1:cbFe9XuiFVIM9MMmG+jY6CfBK9oWcOEE6+i26gXy5bk=
-github.com/456vv/vmap/v2 v2.0.0/go.mod h1:geFop2M5cQZuO1wo/Rjec3F9JNqx3CrjB2JoYOFBfik=
-golang.org/x/net v0.0.0-20181207154023-610586996380 h1:zPQexyRtNYBc7bcHmehl1dH6TB3qn8zytv8cBGLDNY0=
-golang.org/x/net v0.0.0-20181207154023-610586996380/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
-golang.org/x/text v0.3.0 h1:g61tztE5qeGQ89tm6NTjjM9VPIm088od1l6aSorWRWg=
-golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
+github.com/456vv/verror v1.0.1 h1:w6Id3cgHs4qIh+LV6s5OZK2Wwl8LNaDLdBqo5cNYBMk=
+github.com/456vv/verror v1.0.1/go.mod h1:bSnTPUFRHtX0q2zlecuhNAD3NfOk609KNfFcid+PGQc=
+github.com/456vv/vmap/v2 v2.1.0 h1:RBdbLOtYVUTemfW9lT4K1g8gahDlgb4FoUqGnNluIAw=
+github.com/456vv/vmap/v2 v2.1.0/go.mod h1:geFop2M5cQZuO1wo/Rjec3F9JNqx3CrjB2JoYOFBfik=
+github.com/golang/net v0.0.0-20181220203305-927f97764cc3 h1:rAqsl0mY44mls8e7NNu9I8Mf2ikTqYNsq/nKY8Tzrxw=
+github.com/golang/net v0.0.0-20181220203305-927f97764cc3/go.mod h1:98y8FxUyMjTdJ5eOj/8vzuiVO14/dkJ98NYhEPG8QGY=
+github.com/golang/text v0.3.0 h1:uI5zIUA9cg047ctlTptnVc0Ghjfurf2eZMFrod8R7v8=
+github.com/golang/text v0.3.0/go.mod h1:GUiq9pdJKRKKAZXiVgWFEvocYuREvC14NhI4OPgEjeE=
