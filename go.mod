@@ -2,7 +2,7 @@ module github.com/456vv/viot
 
 require (
 	github.com/456vv/verror v1.0.1
-	github.com/456vv/vmap/v2 v2.1.0
+	github.com/456vv/vmap/v2 v2.1.1
 	golang.org/x/net v0.0.0-20181220203305-927f97764cc3
 	golang.org/x/text v0.3.0 // indirect
 )
