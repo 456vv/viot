@@ -69,7 +69,7 @@ func ParseIOTVersion(vers string) (major, minor int, ok bool) {
   	return major, minor, true
 }
 var textprotoReaderPool sync.Pool
-//回收文本格式读取
+//创建文本格式读取
 func newTextprotoReader(br *bufio.Reader) *textproto.Reader {
 	if v := textprotoReaderPool.Get(); v != nil {
 		tr := v.(*textproto.Reader)
@@ -78,7 +78,7 @@ func newTextprotoReader(br *bufio.Reader) *textproto.Reader {
 	}
 	return textproto.NewReader(br)
 }
-//提取文本格式读取
+//回收文本格式读取
 func putTextprotoReader(r *textproto.Reader) {
 	r.R = nil
 	textprotoReaderPool.Put(r)
@@ -132,10 +132,10 @@ func readRequest(b io.Reader) (req *Request, err error) {
 	req.Header		= ij.Header.clone()
 	for hk, hv := range req.Header {
 		if !httpguts.ValidHeaderFieldName(hk) {
-			return nil, verror.TrackErrorf("无效的标题名称 %s", hk)
+			return nil, verror.TrackErrorf("无效的标头名称 %s", hk)
 		}
 		if !httpguts.ValidHeaderFieldValue(hv) {
-			return nil, verror.TrackErrorf("无效的标题值 %s", hv)
+			return nil, verror.TrackErrorf("无效的标头值 %s", hv)
 		}
 	}
   	req.nonce		= ij.Nonce
