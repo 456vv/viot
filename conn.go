@@ -79,10 +79,8 @@ func (T *conn) hijackLocked() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
 	
   	//结束后台接收数据
   	T.r.abortPendingRead()
-  
+  	
   	T.rwc.SetDeadline(time.Time{})
-  
-  	buf = bufio.NewReadWriter(T.bufr, bufio.NewWriter(T.rwc))
   	
   	//后台收到一个字节数据
   	if T.r.hasByte {
@@ -95,7 +93,7 @@ func (T *conn) hijackLocked() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
 	//回收缓冲对象
   	putBufioWriter(T.bufw)
   	T.bufw = nil
-  	return
+  	return T.rwc, bufio.NewReadWriter(T.bufr, bufio.NewWriter(T.rwc)), nil
 }
 
 
@@ -196,8 +194,8 @@ func (T *conn) readLineBytes() (b []byte, err error) {
 
   	//读取行格式
 	tp := newTextprotoReader(T.bufr)
-  	b, err = tp.ReadLineBytes()
   	defer putTextprotoReader(tp)
+  	b, err = tp.ReadLineBytes()
   	if err != nil {
 		//读取数据超出限制
 		if T.r.hitReadLimit() {
@@ -501,12 +499,13 @@ func (T *conn) finalFlush() {
 
 // rstAvoidanceDelay是在关闭整个套接字之前关闭TCP连接的写入端之后我们休眠的时间量。 
 // 通过睡眠，我们增加了客户端看到我们的FIN并处理其最终数据的机会，然后再处理后续的RS，从而关闭已知未读数据的连接。 
-// 这个RST似乎主要发生在BSD系统上。 （和Windows？）这个超时有点武断（周围的延迟）。
+// 这个RST似乎主要发生在BSD系统上。 （和Windows？）这个超时有点武断（大概的延迟）。
 const rstAvoidanceDelay = 500 * time.Millisecond
 type closeWriter interface {
   	CloseWrite() error
 }
- var _ closeWriter = (*net.TCPConn)(nil)
+
+var _ closeWriter = (*net.TCPConn)(nil)
  
  //关闭并写入
 func (T *conn) closeWriteAndWait() {

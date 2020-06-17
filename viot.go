@@ -5,7 +5,7 @@ import(
 	"io"
 )
 
-//上下文的Ken，在请求中可以使用
+//上下文的Key，在请求中可以使用
 type contextKey struct {
 	name string
 }
