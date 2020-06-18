@@ -85,6 +85,7 @@ func (T *conn) hijackLocked() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
   	//后台收到一个字节数据
   	if T.r.hasByte {
   		if _, err := T.bufr.Peek(T.bufr.Buffered() + 1); err != nil {
+  			T.hijackedv.setFalse()
   			return nil, nil, verror.TrackErrorf("意外的Peek失败读取缓冲的字节: %v", err)
   		}
   	}
@@ -598,7 +599,6 @@ func (T *connReader) backgroundRead() {
 	T.lock()
 	if n == 1 {
 		T.hasByte = true
-		T.closeNotify() //请求第一条时候，还没处理。又接收到一请求，则发出取消信息
 	}
 	if ne, ok := err.(net.Error); ok && T.aborted && ne.Timeout() {
 		//忽略这个错误。 这是另一个调用abortPendingRead的例程的预期错误。
