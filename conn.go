@@ -584,17 +584,23 @@ func (T *connReader) startBackgroundRead() {
 	T.lock()
   	defer T.unlock()
   	if T.inRead {
-  		panic("invalid concurrent Body.Read call")
+  		return
   	}
   	if T.hasByte {
   		return
   	}
-  	T.inRead = true
-  	T.conn.rwc.SetReadDeadline(time.Time{})
   	go T.backgroundRead()
 }
 //后台读取
 func (T *connReader) backgroundRead() {
+	T.lock()
+	if T.inRead {
+		T.unlock()
+		return
+	}
+  	T.inRead = true
+  	T.unlock()
+  	T.conn.rwc.SetReadDeadline(time.Time{})
 	n, err := T.conn.rwc.Read(T.byteBuf[:])
 	T.lock()
 	if n == 1 {
@@ -643,19 +649,22 @@ func (T *connReader) closeNotify() {
 
 //读取数据
 func (T *connReader) Read(p []byte) (n int, err error) {
-	T.lock()
-	if T.inRead {
-		T.unlock()
-		panic("当前调用 .Read() 无效")
+	if len(p) == 0 {
+		return 0, nil
 	}
+	
+	T.lock()
+	for T.inRead {
+		T.unlock()
+		T.abortPendingRead()
+		T.lock()
+	}
+	
 	if T.hitReadLimit() {
 		T.unlock()
 		return 0, io.EOF
 	}
-	if len(p) == 0 {
-		T.unlock()
-		return 0, nil
-	}
+
 	if len(p) > T.remain {
 		p = p[:T.remain]
 	}
