@@ -34,7 +34,7 @@ func validMethod(method string) bool {
 //判断协议
 func validNPN(proto string) bool {
   	switch proto {
-  	case "", "http/1.1", "http/1.0":
+  	case "", "IOT/1.1", "IOT/1.0":
   		return false
   	}
   	return true
