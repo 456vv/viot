@@ -18,25 +18,25 @@ import(
 )
 
 //initNPNRequest==================================================================================================================================
-//NPN请求
-type initNPNRequest struct {
-  	srv *Server				// 上级
-  	c *tls.Conn				// 连接
-}
-
-//服务接口
-func (T initNPNRequest) ServeIOT(rw ResponseWriter, req *Request) {
-  	if req.TLS == nil {
-  		req.TLS = &tls.ConnectionState{}
-  		*req.TLS = T.c.ConnectionState()
-  	}
-  	if req.RemoteAddr == "" {
-  		req.RemoteAddr = T.c.RemoteAddr().String()
-  	}
-  	if T.srv.Handler != nil {
-  		T.srv.Handler.ServeIOT(rw, req)
-  	}
-}
+////NPN请求
+//type initNPNRequest struct {
+//  	srv *Server				// 上级
+//  	c *tls.Conn				// 连接
+//}
+//
+////服务接口
+//func (T initNPNRequest) ServeIOT(rw ResponseWriter, req *Request) {
+//  	if req.TLS == nil {
+//  		req.TLS = &tls.ConnectionState{}
+//  		*req.TLS = T.c.ConnectionState()
+//  	}
+//  	if req.RemoteAddr == "" {
+//  		req.RemoteAddr = T.c.RemoteAddr().String()
+//  	}
+//  	if T.srv.Handler != nil {
+//  		T.srv.Handler.ServeIOT(rw, req)
+//  	}
+//}
 
 
 //连接
@@ -127,15 +127,16 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		return nil, ErrReqUnavailable
 	}
 	
-  	T.launchedv.setTrue()
 
 	nonce, err := Nonce()
 	if err != nil {
 		return nil, err
 	}
 	
+  	T.launchedv.setTrue()
+	
 	//导出设备支持的请求格式
-	riot, err := req.RequestIOT(nonce)
+	riot, err := req.RequestConfig(nonce)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +161,8 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 	if d := T.server.WriteTimeout; d != 0 {
   		T.rwc.SetWriteDeadline(time.Now().Add(d))
   	}
-
+	
+	//客户发送一个请求到设备
 	n, err := T.bufw.Write(reqByte)
 	if err != nil {
 		return nil, err
@@ -177,6 +179,7 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 	case <- T.ctx.Done():
 		return nil, verror.TrackErrorf("连接已经关闭: %v", T.ctx.Err())
 	case res := <- done:
+		//设备返回一个响应
 		res.Request = req
 		return res, nil
 	}
@@ -224,8 +227,6 @@ func (T *conn) readResponse(ctx context.Context, br io.Reader) (res *Response, e
 	res.RemoteAddr	= T.remoteAddr
 	return
 }
-
-
   
 //解析请求
 func (T *conn) readRequest(ctx context.Context, br io.Reader) (req *Request, err error) {
@@ -244,11 +245,11 @@ func (T *conn) readRequest(ctx context.Context, br io.Reader) (req *Request, err
 	}
 	
 	if req.ProtoMajor != 1 {
-		return nil, verror.TrackError("不受支持的协议版本")
+		return nil, verror.TrackError("Unsupported protocol version")
 	}
 	
 	if req.Home != "" && !httpguts.ValidHostHeader(req.Home) {
-		return nil, verror.TrackError("畸形的 Home")
+		return nil, verror.TrackError("Malformation Home")
 	}
 	
 	
@@ -257,8 +258,6 @@ func (T *conn) readRequest(ctx context.Context, br io.Reader) (req *Request, err
 	req.TLS			= T.tlsState
 	return
 }
-
-	
 
 //服务
 func (T *conn) serve(ctx context.Context) {
@@ -307,16 +306,16 @@ func (T *conn) serve(ctx context.Context) {
 	
 	T.r 	= &connReader{conn:T}
 	T.bufr 	= newBufioReader(T.r)
-	T.bufw 	= newBufioWriterSize(checkConnErrorWriter{T}, 4<<10)
-	
+	T.bufw 	= newBufioWriterSize(connWriter{conn:T}, 4<<10)
 	
 	T.ctx, T.cancelCtx = context.WithCancel(ctx)
 	defer T.cancelCtx()
 	for {
-		if !T.server.doKeepAlives() {
-			//我们正处于关机模式。 
+		if T.server.shuttingDown() {
+			//服务器已经下线
 			return
 		}
+		
 		lineBytes, err := T.readLineBytes()
 		if err != nil {
 			if isCommonNetReadError(err) {
@@ -385,11 +384,12 @@ func (T *conn) serve(ctx context.Context) {
 			header			: make(Header),
 			closeNotifyCh	: make(chan bool, 1),
 		}
-		w.cw.res = w // w.cw = chunkWriter{w}
+		w.cw.res = w
 		T.curReq.Store(req)
 		T.curRes.Store(w)
 				
 		//后台接收数据
+		//目的是实时检测连接状态是否可用
 		T.r.startBackgroundRead()
 		
 		//设置写入超时时间
@@ -417,6 +417,11 @@ func (T *conn) serve(ctx context.Context) {
 		//不能重用连接，客户端 或 服务端设置了不支持重用
 		if w.closeAfterReply  || T.werr != nil {
 			T.closeWriteAndWait()
+			return
+		}
+		
+		//不支持长连接或服务器已经下线
+		if !T.server.doKeepAlives() {
 			return
 		}
 		
@@ -533,18 +538,18 @@ func (T *conn) Close() {
  	T.setState(StateClosed)
 }
 
-//checkConnErrorWriter==================================================================================================================================
+//connWriter==================================================================================================================================
 //检查写入错误
-type checkConnErrorWriter struct {
-	c *conn																	// 上级
+type connWriter struct {
+	conn *conn																	// 上级
 }
 //写入
-func (T checkConnErrorWriter) Write(p []byte) (n int, err error) {
-	n, err = T.c.rwc.Write(p)
-	if err != nil && T.c.werr == nil {
-		T.c.werr = err
-		T.c.server.logf("viot: 远程IP(%s)数据写入失败error(%s)，预写入data(%s)\n", T.c.remoteAddr, err, p)
-		T.c.cancelCtx()	//取消当前连接的上下文
+func (T connWriter) Write(p []byte) (n int, err error) {
+	n, err = T.conn.rwc.Write(p)
+	if err != nil && T.conn.werr == nil {
+		T.conn.werr = err
+		T.conn.server.logf("viot: 远程IP(%s)数据写入失败error(%s)，预写入data(%s)\n", T.conn.remoteAddr, err, p)
+		T.conn.cancelCtx()	//取消当前连接的上下文
 	}
 	return
 }

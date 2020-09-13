@@ -9,14 +9,14 @@ import(
 )
 
 func Test_RequestIOT_MarshalAndUnmarshal(t *testing.T) {
-	var riot RequestIOT
+	var riot RequestConfig
 	riot.SetBody("123")
 	b, err := riot.Marshal()
 	if err != nil {
 		t.Fatal(err)
 	}
 	
-	var riot1 RequestIOT
+	var riot1 RequestConfig
 	err = riot1.Unmarshal(b)
 	if err != nil {
 		t.Fatal(err)

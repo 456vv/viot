@@ -90,7 +90,7 @@ func Test_response_SetBody(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var ir ResponseIOT
+	var ir ResponseConfig
 	err = json.NewDecoder(bytesBuffer).Decode(&ir)
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +130,7 @@ func Test_response_done(t *testing.T) {
 	if !res.handlerDone.isTrue() {
 		t.Fatalf("错误：handlerDone 是 false")
 	}
-	var ir ResponseIOT
+	var ir ResponseConfig
 	err := json.NewDecoder(bytesBuffer).Decode(&ir)
 	if err != nil {
 		t.Fatal(err)

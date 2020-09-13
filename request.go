@@ -13,14 +13,13 @@ import(
 )
 
 //iot接收或发送数据格式带BODY
-type requestIOTBody struct{
-	*RequestIOT
+type requestConfigBody struct{
+	*RequestConfig
 	Body 	interface{} 		`json:"body,omitempty"`
 }
 
-
 //iot接收或发送数据格式
-type RequestIOT struct{
+type RequestConfig struct{
 	Nonce 	string				`json:"nonce"`//-,omitempty,string,number,boolean
 	Proto 	string				`json:"proto"`
 	Method 	string				`json:"method"`
@@ -32,21 +31,21 @@ type RequestIOT struct{
 
 //设置主体
 //	i interface{}	主体信息
-func (T *RequestIOT) SetBody(i interface{}) {
+func (T *RequestConfig) SetBody(i interface{}) {
 	T.body = i
 }
 
 //读取主体
 //	interface{}		主体信息
-func (T *RequestIOT) GetBody() interface{} {
+func (T *RequestConfig) GetBody() interface{} {
 	return T.body
 }
 
 //编码，字节末尾追加上一个 \\n 字节
 //	[]byte			编码后的字节
 //	error			错误
-func (T *RequestIOT) Marshal() ([]byte, error) {
-	b, err := json.Marshal(&requestIOTBody{T, T.body})
+func (T *RequestConfig) Marshal() ([]byte, error) {
+	b, err := json.Marshal(&requestConfigBody{T, T.body})
 	if err != nil {
 		return nil, verror.TrackError(err)
 	}
@@ -56,18 +55,18 @@ func (T *RequestIOT) Marshal() ([]byte, error) {
 //解码
 //	data []byte		编码后的字节
 //	error			错误
-func (T *RequestIOT) Unmarshal(data []byte) error {
-	var r requestIOTBody
+func (T *RequestConfig) Unmarshal(data []byte) error {
+	var r requestConfigBody
 	err := json.Unmarshal(data, &r)
 	if err != nil {
 		return verror.TrackError(err)
 	}
-	*T 		= *r.RequestIOT
+	*T 		= *r.RequestConfig
 	T.body	= r.Body
 	return nil
 }
 
-type reqIOTBody struct{
+type reqBody struct{
 	Body interface{}			`json:"body"`
 }
 
@@ -106,13 +105,13 @@ func (T *Request) GetBody(i interface{}) error {
 		return ErrGetBodyed
 	}
 	T.getbodyed = true
-
+	
 	//非 POST 提交，不支持提取BODY数据
 	if T.datab == nil {
 		return ErrBodyNotAllowed
 	}
 	
-	err := json.NewDecoder(T.datab).Decode(&reqIOTBody{i})
+	err := json.NewDecoder(T.datab).Decode(&reqBody{i})
 	if err == nil {
 		T.datab = nil
 	}	
@@ -129,8 +128,7 @@ func (T *Request) SetBody(i interface{}) error {
 
 //判断版本号
 func (T *Request) ProtoAtLeast(major, minor int) bool {
-  	return T.ProtoMajor > major ||
-  		T.ProtoMajor == major && T.ProtoMinor >= minor
+  	return T.ProtoMajor > major || T.ProtoMajor == major && T.ProtoMinor >= minor
 }
 
 //应该关闭
@@ -206,10 +204,10 @@ func (T *Request) SetTokenAuth(token string) {
 
 //请求，发往设备的请求
 //	nonce string		编号
-//	riot *RequestIOT	发往设备的请求
+//	riot *RequestConfig	发往设备的请求
 //	err error			错误
-func (T *Request) RequestIOT(nonce string) (riot *RequestIOT, err error) {
-	riot = &RequestIOT{
+func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
+	riot = &RequestConfig{
 		Nonce	: nonce,
 		Proto	: T.Proto,
 		Method	: T.Method,

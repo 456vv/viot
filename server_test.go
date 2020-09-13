@@ -132,7 +132,7 @@ func Test_server_Serve(t *testing.T){
 			c.Close()
 			
 //			fmt.Printf("%s\n", p[:n])
-			var ir ResponseIOT
+			var ir ResponseConfig
 			if err = json.NewDecoder(bytes.NewReader(p[:n])).Decode(&ir); err != nil {
 				t.Fatalf("%d, 错误 %v", index, err)
 			}

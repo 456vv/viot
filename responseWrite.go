@@ -2,7 +2,6 @@ package viot
 
 import (
 	"github.com/456vv/verror"
-	"net/http"
 	//"fmt"
 	"net"
 	"bufio"
@@ -60,7 +59,7 @@ type responseWrite struct{
 //	int, error	写入数量，错误
  func (T *responseWrite) Write(b []byte) (int, error) {
 	if T.conn.hijackedv.isTrue() {
-  		T.conn.server.logf("viot: 此连接已经劫持，不允许使用此函数 .Write()")
+  		T.conn.server.logf("viot: 此连接已经劫持，不允许使用此函数Write")
   		return 0, ErrHijacked
   	}
   	T.isWrite = true
@@ -87,7 +86,7 @@ func (T *responseWrite) bodyAllowed() bool {
 //默认状态码
 func (T *responseWrite) default200Status() {
   	if !T.wroteStatus {
-  		T.Status(http.StatusOK)
+  		T.Status(200)
   	}
 }
 
@@ -130,7 +129,7 @@ func (T *responseWrite) closeNotify() {
 //	<-chan bool		关闭事件
 func (T *responseWrite) CloseNotify() <-chan bool {
   	if T.handlerDone.isTrue() {
-  		panic("viot: ServeIOT已经调用完成，不允许再调用CloseNotify")
+  		panic("viot: 响应处理完成，不允许再调用CloseNotify")
   	}
   	return T.closeNotifyCh
 }
@@ -152,7 +151,7 @@ func (T *responseWrite) done() error {
 //	err error				错误
 func (T *responseWrite) Hijack() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
 	if T.handlerDone.isTrue() {
-		return nil, nil, verror.TrackErrorf("ServeIOT已经调用完成，不允许再调用 .Hijack()")
+		return nil, nil, verror.TrackErrorf("响应处理完成，不允许再调用Hijack")
   	}
   	
   	return T.conn.hijackLocked()

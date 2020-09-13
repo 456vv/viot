@@ -103,7 +103,7 @@ func readRequest(b io.Reader) (req *Request, err error) {
   	req.datab = new(bytes.Buffer)
 	//{json}
   	
-	var ij RequestIOT
+	var ij RequestConfig
 	err = json.NewDecoder( io.TeeReader(bufr, req.datab) ).Decode(&ij)
 	if err != nil {
 		return nil, verror.TrackErrorf("请求 json 内容格式不正确 %v", err)
@@ -167,7 +167,7 @@ func readResponse(b io.Reader) (res *Response, err error) {
 	res = new(Response)
 	//{json}
 	
-	var riot ResponseIOT
+	var riot ResponseConfig
 	err = json.NewDecoder( b ).Decode(&riot)
 	if err != nil {
 		return nil, verror.TrackErrorf("响应 json 内容格式不正确 %v", err)

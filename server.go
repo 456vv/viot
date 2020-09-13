@@ -315,7 +315,7 @@ func (T *Server) doKeepAlives() bool {
   	return atomic.LoadInt32(&T.disableKeepAlives) == 0 && !T.shuttingDown()
 }
 
-//判断服务器下线
+//判断服务器下线...
 func (T *Server) shuttingDown() bool {
   	return atomic.LoadInt32(&T.inShutdown) != 0
 }

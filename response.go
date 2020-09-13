@@ -6,13 +6,12 @@ import(
 )
 
 
-type ResponseIOT struct{
+type ResponseConfig struct{
 	Nonce 	string						`json:"nonce"`//-,omitempty,string,number,boolean
 	Status	int							`json:"status"`
 	Header 	Header						`json:"header"`
 	Body 	interface{}					`json:"body,omitempty"`
 }
-
 
 
 //响应
@@ -47,7 +46,7 @@ func (T *Response) WriteTo(w ResponseWriter) {
 //写入w
 //	w io.Writer		T响应写w
 func (T *Response) Write(w io.Writer) error {
-	ir := &ResponseIOT{
+	ir := &ResponseConfig{
 		Nonce	: T.nonce,
 		Status	: T.Status,
 		Header	: T.Header.clone(),
@@ -58,10 +57,10 @@ func (T *Response) Write(w io.Writer) error {
 
 //转IOT支持的格式
 //	nonce string		编号
-//	riot *ResponseIOT	IOT响应数据格式
+//	riot *ResponseConfig	IOT响应数据格式
 //	err error			错误
-func (T *Response) ResponseIOT(nonce string) (riot *ResponseIOT, err error) {
-	ir := &ResponseIOT{
+func (T *Response) ResponseConfig(nonce string) (riot *ResponseConfig, err error) {
+	ir := &ResponseConfig{
 		Nonce	: nonce,
 		Status	: T.Status,
 		Header	: T.Header.clone(),
