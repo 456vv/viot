@@ -50,7 +50,7 @@ type Server struct {
     Addr            string                                              // 如果空，TCP监听的地址是，“:http”
     Handler         Handler                                             // 如果nil，处理器调用，http.DefaultServeMux
     ConnState       func(net.Conn, ConnState)                           // 每一个连接跟踪
-    ConnHook        func(net.Conn) (net.Conn, error)                    // 连接钩子
+    ConnHook        func(context.Context, net.Conn) (net.Conn, error)   // 连接钩子
     HandlerRequest  func(b io.Reader) (req *Request, err error)     	// 处理请求
     HandlerResponse	func(b io.Reader) (res *Response, err error)		// 处理响应
     ErrorLog        *log.Logger                                         // 错误？默认是 os.Stderr
@@ -215,11 +215,11 @@ func (T *Server) Serve(l net.Listener) error {
 		tempDelay = 0
 		
 		//
-		go func(rw net.Conn){
+		go func(connCtx context.Context, rw net.Conn){
 			nrw := rw
 			var err error
 			if T.ConnHook != nil {
-				nrw, err = T.ConnHook(rw)
+				nrw, err = T.ConnHook(connCtx, rw)
 				if err != nil {
 					T.logf(err.Error())
 					return
@@ -227,8 +227,8 @@ func (T *Server) Serve(l net.Listener) error {
 			}
 			c := &conn{server: T, rwc: nrw}
 			c.setState(StateNew)
-			c.serve(ctx)
-		}(rw)
+			c.serve(connCtx)
+		}(ctx, rw)
 	}
 }
 

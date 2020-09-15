@@ -18,25 +18,27 @@ import(
 )
 
 //initNPNRequest==================================================================================================================================
-////NPN请求
-//type initNPNRequest struct {
-//  	srv *Server				// 上级
-//  	c *tls.Conn				// 连接
-//}
-//
-////服务接口
-//func (T initNPNRequest) ServeIOT(rw ResponseWriter, req *Request) {
-//  	if req.TLS == nil {
-//  		req.TLS = &tls.ConnectionState{}
-//  		*req.TLS = T.c.ConnectionState()
-//  	}
-//  	if req.RemoteAddr == "" {
-//  		req.RemoteAddr = T.c.RemoteAddr().String()
-//  	}
-//  	if T.srv.Handler != nil {
-//  		T.srv.Handler.ServeIOT(rw, req)
-//  	}
-//}
+//NPN请求
+type initNPNRequest struct {
+	ctx context.Context		// 上下文
+  	srv *Server				// 上级
+  	c *tls.Conn				// 连接
+}
+func (T initNPNRequest) BaseContext() context.Context { return T.ctx }
+
+//服务接口
+func (T initNPNRequest) ServeIOT(rw ResponseWriter, req *Request) {
+  	if req.TLS == nil {
+  		req.TLS = &tls.ConnectionState{}
+  		*req.TLS = T.c.ConnectionState()
+  	}
+  	if req.RemoteAddr == "" {
+  		req.RemoteAddr = T.c.RemoteAddr().String()
+  	}
+  	if T.srv.Handler != nil {
+  		T.srv.Handler.ServeIOT(rw, req)
+  	}
+}
 
 
 //连接
@@ -277,33 +279,32 @@ func (T *conn) serve(ctx context.Context) {
 	}()
 	//T.server.logf("viot: 远程IP(%s)连接网络\n", T.remoteAddr)
 
-//	if tlsConn, ok := T.rwc.(*tls.Conn); ok {
-//		//这里等验证，暂时用不上
-//		//意思就是暂时不支持TLS
-//		if d := T.server.ReadTimeout; d != 0 {
-//			T.rwc.SetReadDeadline(time.Now().Add(d))
-//		}
-//		if d := T.server.WriteTimeout; d != 0 {
-//			T.rwc.SetWriteDeadline(time.Now().Add(d))
-//		}
-//		if err := tlsConn.Handshake(); err != nil {
-//			T.server.logf("viot: TLS handshake error from %s: %v", T.rwc.RemoteAddr(), err)
-//			return
-//		}
-//		T.tlsState = new(tls.ConnectionState)
-//		*T.tlsState = tlsConn.ConnectionState()
-//		//待验证证书请求的协议
-//		if proto := T.tlsState.NegotiatedProtocol; validNPN(proto) {
-//			if fn := T.server.TLSNextProto[proto]; fn != nil {
-//				h := initNPNRequest{T.server, tlsConn}
-//				fn(T.server, tlsConn, h)
-//			}
-//			return
-//		}
-//	}
+	if tlsConn, ok := T.rwc.(*tls.Conn); ok {
+		if d := T.server.ReadTimeout; d != 0 {
+			T.rwc.SetReadDeadline(time.Now().Add(d))
+		}
+		if d := T.server.WriteTimeout; d != 0 {
+			T.rwc.SetWriteDeadline(time.Now().Add(d))
+		}
+		if err := tlsConn.Handshake(); err != nil {
+			T.server.logf("viot: 来自的TLS握手错误 %s: %v", T.rwc.RemoteAddr(), err)
+			return
+		}
+		T.tlsState = new(tls.ConnectionState)
+		*T.tlsState = tlsConn.ConnectionState()
+		//待验证证书请求的协议
+		//NegotiatedProtocol 是客户端携带过来的
+		//TLSNextProto 是服务处理该协议的
+		if proto := T.tlsState.NegotiatedProtocol; validNPN(proto) {
+			if fn := T.server.TLSNextProto[proto]; fn != nil {
+				h := initNPNRequest{ctx, T.server, tlsConn}
+				fn(T.server, tlsConn, h)
+			}
+			return
+		}
+	}
 	
 	//JSON格式
-	
 	T.r 	= &connReader{conn:T}
 	T.bufr 	= newBufioReader(T.r)
 	T.bufw 	= newBufioWriterSize(connWriter{conn:T}, 4<<10)
@@ -431,7 +432,6 @@ func (T *conn) serve(ctx context.Context) {
 			//等待数据，读取超时就退出
 			return
 		}
-
 	}
 }
 
