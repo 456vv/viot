@@ -24,9 +24,8 @@ func (T *Route) HandleFunc(url string,  handler func(w ResponseWriter, r *Reques
 }
 
 //ServeIOT 服务IOT
-//  参：
-//      w ResponseWriter    响应
-//      r *Request          请求
+//	w ResponseWriter    响应
+//	r *Request          请求
 func (T *Route) ServeIOT(w ResponseWriter, r *Request){
 	inf, ok := T.rt.Load(r.URL.Path)
 	if ok {

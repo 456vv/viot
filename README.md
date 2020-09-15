@@ -59,7 +59,7 @@ func ReadResponse(r *bufio.Reader, req *Request) (res *Response, err error) // �
 func Nonce() (nonce string, err error)                                  // 生成编号
 func Error(w ResponseWriter, err string, code int)                      // 快速设置错误
 
-type RequestIOT struct{                                         // iot接收或发送数据格式
+type RequestConfig struct{                                         // iot接收或发送数据格式
     Nonce   string          `json:"nonce"`//-,omitempty,string,number,boolean
     Proto   string          `json:"proto"`
     Method  string          `json:"method"`
@@ -67,10 +67,10 @@ type RequestIOT struct{                                         // iot接收或�
     Home    string          `json:"home"`
     Header  Header          `json:"header"`
 }
-    func (T *RequestIOT) SetBody(i interface{})                             // 设置主体
-    func (T *RequestIOT) GetBody() interface{}                              // 读取主体
-    func (T *RequestIOT) Marshal() ([]byte, error)                          // 编码
-    func (T *RequestIOT) Unmarshal(data []byte) error                       // 解码
+    func (T *RequestConfig) SetBody(i interface{})                          // 设置主体
+    func (T *RequestConfig) GetBody() interface{}                           // 读取主体
+    func (T *RequestConfig) Marshal() ([]byte, error)                       // 编码
+    func (T *RequestConfig) Unmarshal(data []byte) error                    // 解码
 
 type Request struct {                                               // 请求
     nonce       int64                                                       // 编号
@@ -97,9 +97,9 @@ type Request struct {                                               // 请求
     func (T *Request) SetBasicAuth(username, password string)               // 设置基本验证
     func (T *Request) GetTokenAuth() (token string, ok bool)                // token验证
     func (T *Request) SetTokenAuth(token string)                            // 设置token验证
-    func (T *Request) RequestIOT(nonce string) (riot *RequestIOT, err error)// 请求，发往设备的请求
+    func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error)// 请求，发往设备的请求
 var ErrAbortHandler = errors.New("viot: abort Handler")                     // 错误标头
-type ResponseIOT struct{
+type ResponseConfig struct{
     Nonce     string                        `json:"nonce"`
     Status    int                            `json:"status"`
     Header     Header                        `json:"header"`
@@ -116,8 +116,8 @@ type Response struct{                                               // 响应
 }
     func (T *Response) SetNonce(n string)                                   // 读取编号
     func (T *Response) WriteTo(w ResponseWriter)                            // 写入到
-    func (T *Response) Write(w io.Writer) error                                // 写入w
-    func (T *Response) ResponseIOT(nonce string) (riot *ResponseIOT, err error)// 响应，接收设备的响应
+    func (T *Response) Write(w io.Writer) error                             // 写入w
+    func (T *Response) ResponseConfig(nonce string) (riot *ResponseConfig, err error)// 响应，接收设备的响应
 type ResponseWriter interface {                                     // 响应写入接口
     Header() Header                                                         // 标头
     Status(int)                                                             // 状态
