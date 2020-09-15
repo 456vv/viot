@@ -16,5 +16,6 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 	}
 	tc.SetKeepAlive(true)
 	tc.SetKeepAlivePeriod(3 * time.Minute)
+	tc.SetNoDelay(true)
 	return tc, nil
 }

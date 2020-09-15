@@ -49,8 +49,9 @@ func (T serverHandler) ServeIOT(rw ResponseWriter, req *Request) {
 type Server struct { 
     Addr            string                                              // 如果空，TCP监听的地址是，“:http”
     Handler         Handler                                             // 如果nil，处理器调用，http.DefaultServeMux
+	BaseContext 	func(net.Listener) context.Context					// 监听上下文
+    ConnContext     func(context.Context, net.Conn) (context.Context, net.Conn, error)   // 连接钩子
     ConnState       func(net.Conn, ConnState)                           // 每一个连接跟踪
-    ConnHook        func(context.Context, net.Conn) (net.Conn, error)   // 连接钩子
     HandlerRequest  func(b io.Reader) (req *Request, err error)     	// 处理请求
     HandlerResponse	func(b io.Reader) (res *Response, err error)		// 处理响应
     ErrorLog        *log.Logger                                         // 错误？默认是 os.Stderr
@@ -59,13 +60,12 @@ type Server struct {
     IdleTimeout     time.Duration                                       // 空闲时间，等待用户重新请求
     TLSNextProto    map[string]func(*Server, *tls.Conn, Handler)        // TLS劫持，["v3"]=function(自身, TLS连接, Handler)
     MaxLineBytes    int                                                 // 限制读取行数据大小
-
     disableKeepAlives int32                                             // 禁止长连接
     inShutdown        int32                                             // 判断服务器是否已经下线
 
 
     mu          sync.Mutex                                              // 锁
-    listeners   map[net.Listener]struct{}                               // 监听集
+    listeners   map[*net.Listener]struct{}                               // 监听集
     activeConn  map[*conn]struct{}                                      // 连接集
     doneChan    chan struct{}                                           // 服务关闭
     onShutdown  []func()                                                // 服务器下线事件
@@ -106,14 +106,17 @@ func (T *Server) closeDoneChan() {
 }
 
 //记录监听
-func (T *Server) trackListener(ln net.Listener, add bool) {
+func (T *Server) trackListener(ln *net.Listener, add bool) bool {
 	T.mu.Lock()
 	defer T.mu.Unlock()
 	
 	if T.listeners == nil {
-		T.listeners = make(map[net.Listener]struct{})
+		T.listeners = make(map[*net.Listener]struct{})
 	}
 	if add {
+		if T.shuttingDown() {
+			return false
+		}
 		if len(T.listeners) == 0 && len(T.activeConn) == 0 {
   			T.doneChan = nil
   		}
@@ -121,6 +124,7 @@ func (T *Server) trackListener(ln net.Listener, add bool) {
 	}else{
 		delete(T.listeners, ln)
 	}
+	return true
 }
 
 //删除监听
@@ -129,7 +133,7 @@ func (T *Server) closeListeners() error {
 	defer T.mu.Unlock()
 	var err error
 	for ln := range T.listeners {
-		if cerr := ln.Close(); cerr != nil && err == nil {
+		if cerr := (*ln).Close(); cerr != nil && err == nil {
 			err = cerr
 		}
 		delete(T.listeners, ln)
@@ -173,20 +177,33 @@ func (T *Server) ListenAndServe() error {
 	if err != nil {
 		return verror.TrackError(err)
 	}
-	return T.Serve(tcpKeepAliveListener{ln.(*net.TCPListener)})
+	return T.Serve(ln)
 }
 
 //服务器监听
 //	l net.Listener	监听
 //	error			错误
 func (T *Server) Serve(l net.Listener) error {
-	defer l.Close()
 	var tempDelay time.Duration
 	
-	T.trackListener(l, true)
-	defer T.trackListener(l, false)
+	origListener := l
+	l = &tcpKeepAliveListener{l.(*net.TCPListener)}
+	defer l.Close()
+	
+	if !T.trackListener(&l, true) {
+		//服务器下线
+		return ErrServerClosed
+	}
+	defer T.trackListener(&l, false)
 	
 	baseCtx := context.Background()
+	if T.BaseContext != nil {
+		baseCtx = T.BaseContext(origListener)
+		if baseCtx == nil {
+			return verror.TrackError("vweb: BaseContext returned a nil context")
+		}
+	}
+	
 	ctx := context.WithValue(baseCtx, ServerContextKey, T)
 	for {
 		rw, e := l.Accept()
@@ -215,11 +232,12 @@ func (T *Server) Serve(l net.Listener) error {
 		tempDelay = 0
 		
 		//
-		go func(connCtx context.Context, rw net.Conn){
+		go func(ctx context.Context, rw net.Conn){
 			nrw := rw
+			connCtx := ctx
 			var err error
-			if T.ConnHook != nil {
-				nrw, err = T.ConnHook(connCtx, rw)
+			if T.ConnContext != nil {
+				connCtx, nrw, err = T.ConnContext(ctx, rw)
 				if err != nil {
 					T.logf(err.Error())
 					return

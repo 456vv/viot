@@ -31,8 +31,9 @@ type HandlerFunc func(ResponseWriter, *Request)                 // 处理函数
 type Server struct {                                            // 服务器
     Addr            string                                              // 如果空，TCP监听的地址是，“:http”
     Handler         Handler                                             // 如果nil，处理器调用，http.DefaultServeMux
+    BaseContext     func(net.Listener) context.Context                  // 监听上下文
+    ConnContext     func(context.Context, net.Conn) (context.Context, net.Conn, error)   // 连接钩子
     ConnState       func(net.Conn, ConnState)                           // 每一个连接跟踪
-    ConnHook        func(net.Conn) (net.Conn, error)                    // 连接钩子
     HandlerRequest  func(b io.Reader) (req *Request, err error)         // 处理请求
     HandlerResponse func(b io.Reader) (res *Response, err error)        // 处理响应
     ErrorLog        *log.Logger                                         // 错误？默认是 os.Stderr

@@ -303,7 +303,6 @@ func (T *conn) serve(ctx context.Context) {
 			return
 		}
 	}
-	
 	//JSON格式
 	T.r 	= &connReader{conn:T}
 	T.bufr 	= newBufioReader(T.r)
@@ -316,7 +315,6 @@ func (T *conn) serve(ctx context.Context) {
 			//服务器已经下线
 			return
 		}
-		
 		lineBytes, err := T.readLineBytes()
 		if err != nil {
 			if isCommonNetReadError(err) {
@@ -326,14 +324,12 @@ func (T *conn) serve(ctx context.Context) {
 			return
 		}
 		//T.server.logf("viot: 从远程IP(%s)读取数据行line:\n%s\n\n", T.remoteAddr, lineBytes)
-		
 		//空行跳过
 		if len(lineBytes) == 0 {
 			continue
 		}
 		br 		:= bytes.NewReader(lineBytes)
-		isReq 	:= bytes.Contains(lineBytes, []byte("\"proto\":"))
-		
+		isReq 	:= bytes.Contains(lineBytes, []byte("\"proto\":\"IOT/"))
 		//主动向设备发送请求
 		//等待设备响应信息
 		if !isReq {
@@ -351,6 +347,10 @@ func (T *conn) serve(ctx context.Context) {
 					case cres <- res:
 						delete(T.activeReq, res.nonce)
 					}
+				}else{
+					//无法认识该序号
+					T.mu.Unlock()
+					return
 				}
 				T.mu.Unlock()
 				
@@ -372,8 +372,9 @@ func (T *conn) serve(ctx context.Context) {
 		//被动得到设备发来请求
 		//等待服务器响应信息
 		req, err := T.readRequest(T.ctx, br)
+
 		if err != nil {
-			fmt.Fprintf(T.rwc, `{"body":%q,"header":{"Connection": "close"},"nonce":"-1","status":400}`,"Bad Request: "+err.Error())
+			fmt.Fprintf(T.rwc, `{"body":%q,"header":{"Connection": "close"},"nonce":"-1","status":400}\n`,"Bad Request: "+err.Error())
 			T.closeWriteAndWait()
 			return
 		}
