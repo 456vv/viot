@@ -1,9 +1,3 @@
-# viot [![Build Status](https://travis-ci.org/456vv/viot.svg?branch=master)](https://travis-ci.org/456vv/viot)
-golang viot, 简单的iot服务器。
-
-
-# **列表：**
-```go
 const DefaultLineBytes = 1 << 20                                        // 1 MB
 var (
     ErrBodyNotAllowed   = verror.TrackError("请求方法或状态码是不允许")
@@ -241,4 +235,6 @@ type ServerHandlerDynamic struct {                                          // �
     func (T *ServerHandlerDynamic) ParseFile(path string) error                                 // 解析模板文件
     func (T *ServerHandlerDynamic) ParseText(content, name string) error                        // 解析模板文本
     func (T *ServerHandlerDynamic) ServeHTTP(rw http.ResponseWriter, req *http.Request)         // 服务HTTP
-```
+
+
+

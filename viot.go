@@ -23,6 +23,8 @@ type noBody struct{}
 func (T *noBody) Decode(i interface{}) error {return io.EOF}
 
 
+// 点函数映射
+var dotPackage = make(map[string]map[string]interface{})
 
 
 

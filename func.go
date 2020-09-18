@@ -18,6 +18,18 @@ import(
     "math/big"	
 	"golang.org/x/net/http/httpguts"
 )
+
+//ExtendTemplatePackage 扩展模板的包
+//	pkgName string					包名
+//	deputy map[string]interface{} 	函数集
+func ExtendTemplatePackage(pkgName string, deputy map[string]interface{}) {
+	if _, ok := dotPackage[pkgName]; !ok {
+		dotPackage[pkgName] = make(map[string]interface{})
+	}
+	for name, fn  := range deputy {
+		dotPackage[pkgName][name]=fn
+	}
+}
 //在切片中查找
 func strSliceContains(ss []string, t string) bool {
 	for _, v := range ss {
@@ -363,4 +375,28 @@ func Error(w ResponseWriter, err string, code int){
 	w.Status(code)
 	w.Header().Set("Connection","close")
 	w.SetBody(err)
+}
+//derogatoryDomain 贬域名
+//	host string             host地址
+//	f func(string) bool     调用 f 函数，并传入贬域名
+func derogatoryDomain(host string, f func(string) bool){
+	//先全字匹配
+    if f(host) {
+    	return
+    }
+    //后通配符匹配
+	pos := strings.Index(host, ":")
+	var port string
+	if pos >= 0 {
+		port = host[pos:]
+		host = host[:pos]
+	}
+	labels := strings.Split(host, ".")
+	for i := range labels {
+		labels[i]="*"
+		candidate := strings.Join(labels, ".")+port
+        if f(candidate) {
+        	break
+        }
+	}
 }

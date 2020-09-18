@@ -29,7 +29,7 @@ type CloseNotifier interface {
  
  //发射，服务器使用当前连接作为客户端给智能设置发送信息
  type Launcher interface{
-    Launch() (tr RoundTripper, err error)
+    Launch() RoundTripper
 }
  
 //响应
@@ -58,15 +58,27 @@ type responseWrite struct{
 //	b []byte	字节串
 //	int, error	写入数量，错误
  func (T *responseWrite) Write(b []byte) (int, error) {
+ 	 return T.write(len(b), b, "")
+}
+ func (T *responseWrite) WriteString(s string) (n int, err error) {
+ 	 return T.write(len(s), nil, s)
+ }
+ func (T *responseWrite) write(lenData int, dataB []byte, dataS string) (n int, err error) {
 	if T.conn.hijackedv.isTrue() {
   		T.conn.server.logf("viot: 此连接已经劫持，不允许使用此函数Write")
   		return 0, ErrHijacked
   	}
+  	
+	if lenData == 0 {
+		return 0, nil
+	}
   	T.isWrite = true
- 	return  T.conn.bufw.Write(b)
-}
+	if dataB != nil {
+		return T.conn.bufw.Write(dataB)
+	}
+	return T.conn.bufw.WriteString(dataS)
+ }
 
- 
 //写入状态
 //	code int	状态码
 func (T *responseWrite) Status(code int) {
@@ -159,9 +171,8 @@ func (T *responseWrite) Hijack() (rwc net.Conn, buf *bufio.ReadWriter, err error
 
 //发射
 //	tr RoundTripper	转发
-//	err error		错误
-func (T *responseWrite) Launch() (tr RoundTripper, err error) {
-	return T.conn, nil
+func (T *responseWrite) Launch() RoundTripper {
+	return T.conn
 }
 
 

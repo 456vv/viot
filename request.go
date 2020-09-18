@@ -196,6 +196,7 @@ func (T *Request) GetTokenAuth() (token string, ok bool) {
   	}
   	return auth[len(prefix):], true
 }
+
 //设置token验证
 //	token string	令牌
 func (T *Request) SetTokenAuth(token string) {

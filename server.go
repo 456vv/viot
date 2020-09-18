@@ -200,7 +200,7 @@ func (T *Server) Serve(l net.Listener) error {
 	if T.BaseContext != nil {
 		baseCtx = T.BaseContext(origListener)
 		if baseCtx == nil {
-			return verror.TrackError("vweb: BaseContext returned a nil context")
+			return verror.TrackError("viot: BaseContext returned a nil context")
 		}
 	}
 	
@@ -355,35 +355,3 @@ func (T *Server) closeIdleConns() bool {
 	//如果没有可用的空闲连接，返回true
 	return quiescent
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

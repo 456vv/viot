@@ -358,11 +358,7 @@ func Test_conn_serve2(t *testing.T){
 		}
 		c.server.Handler=HandlerFunc(func(w ResponseWriter, r *Request){
 			if _, ok := iotRes[r.RemoteAddr]; !ok {
-				launch, err := w.(Launcher).Launch()
-				if err != nil {
-					t.Fatal(err)
-					return
-				}
+				launch := w.(Launcher).Launch()
 				iotRes[r.RemoteAddr] = launch
 				go iotLaunch(r.RemoteAddr, r)
 			}
