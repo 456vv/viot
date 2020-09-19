@@ -37,7 +37,7 @@ type serverHandler struct {
 func (T serverHandler) ServeIOT(rw ResponseWriter, req *Request) {
   	handler := T.srv.Handler
   	if handler == nil {
-  		//handler = DefaultServeMux
+  		//这个要做一个默认处理！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！
   		return
   	}
   	handler.ServeIOT(rw, req)
@@ -239,6 +239,7 @@ func (T *Server) Serve(l net.Listener) error {
 			if T.ConnContext != nil {
 				connCtx, nrw, err = T.ConnContext(ctx, rw)
 				if err != nil {
+					defer rw.CLose()
 					T.logf(err.Error())
 					return
 				}

@@ -1,0 +1,12 @@
+//template
+
+{{
+    $ctx := .Context
+    $Plugin := $ctx.Value "Plugin"
+    
+    $Pbw := $Plugin.HTTP "bw"
+	$Request := .Request
+    Set $Request "Host" ""
+	$ResponseWriter	:= .ResponseWriter
+	$Pbw.ServeHTTP $ResponseWriter $Request
+}}

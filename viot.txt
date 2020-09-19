@@ -24,7 +24,7 @@ type HandlerFunc func(ResponseWriter, *Request)                 // 处理函数
 
 type Server struct {                                            // 服务器
     Addr            string                                              // 如果空，TCP监听的地址是，“:http”
-    Handler         Handler                                             // 如果nil，处理器调用，http.DefaultServeMux
+    Handler         Handler                                             // 如果nil，处理器调用
     BaseContext     func(net.Listener) context.Context                  // 监听上下文
     ConnContext     func(context.Context, net.Conn) (context.Context, net.Conn, error)   // 连接钩子
     ConnState       func(net.Conn, ConnState)                           // 每一个连接跟踪
@@ -181,14 +181,14 @@ type HomePool struct {}                                                     // �
     func (T *HomePool) SetRecoverSession(d time.Duration)                       // 设置回收无效时间隔（默认1秒）
     func (T *HomePool) Start() error                                            // 启动池
 type TemplateDot struct {                                                   // 模板点
-    R        *http.Request                                                      // 请求
-    W        http.ResponseWriter                                            
+    R        *Request                                                      // 请求
+    W        ResponseWriter                                            
     func (T *TemplateDot) Defer(call interface{}, args ...interface{}) error    // 退同调用
     func (T *TemplateDot) Free()                                                // 释放Defer
     func (T *TemplateDot) Global() Globaler                                     // 全站缓存
-    func (T *TemplateDot) Header() http.Header                                  // 标头
-    func (T *TemplateDot) Request() *http.Request                               // 请求的信息
-    func (T *TemplateDot) ResponseWriter() http.ResponseWriter                  // 数据写入响应
+    func (T *TemplateDot) Header() Header                                  // 标头
+    func (T *TemplateDot) Request() *Request                               // 请求的信息
+    func (T *TemplateDot) ResponseWriter() ResponseWriter                  // 数据写入响应
     func (T *TemplateDot) Launch() RoundTripper                                 // 发射
     func (T *TemplateDot) Hijack() (net.Conn, *bufio.ReadWriter, error)         // 劫持
     func (T *TemplateDot) RootDir(upath string) string                          // 家的根目录
@@ -234,7 +234,7 @@ type ServerHandlerDynamic struct {                                          // �
     func (T *ServerHandlerDynamic) Parse(bufr *bytes.Buffer) (err error)                        // 解析模板
     func (T *ServerHandlerDynamic) ParseFile(path string) error                                 // 解析模板文件
     func (T *ServerHandlerDynamic) ParseText(content, name string) error                        // 解析模板文本
-    func (T *ServerHandlerDynamic) ServeHTTP(rw http.ResponseWriter, req *http.Request)         // 服务HTTP
+    func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request)         // 服务HTTP
 
 
 

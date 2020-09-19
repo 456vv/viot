@@ -12,6 +12,7 @@ import (
     "runtime"
     "github.com/456vv/verror"
     "io"
+    "log"
 )
 
 
@@ -32,14 +33,15 @@ type ServerHandlerDynamic struct {
     Home        		*Home																// 网站配置
 	Context				context.Context														// 上下文
 	Plus				map[string]DynamicTemplateFunc										// 支持更动态文件类型
+	HandlerError		func(w ResponseWriter, r *Request, err error)						// 接管ServeIOT处理错误
    	exec				DynamicTemplater
    	modeTime			time.Time
 }
 
-//ServeHTTP 服务HTTP
+//ServeIOT 服务IOT
 //	rw ResponseWriter    响应
 //	req *Request         请求
-func (T *ServerHandlerDynamic) ServeHTTP(rw ResponseWriter, req *Request){
+func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
 
 	if T.PagePath == "" {
 		T.PagePath = req.URL.Path
@@ -48,7 +50,13 @@ func (T *ServerHandlerDynamic) ServeHTTP(rw ResponseWriter, req *Request){
 
 	osFile, err := os.Open(filePath)
 	if err != nil {
-	    Error(rw, fmt.Sprintf("Failed to read the file! Error: %s", err.Error()), 500)
+		//打开文件错误
+		err = fmt.Errorf("Failed to read the file! Error: %s", err.Error())
+		if T.HandlerError != nil {
+			T.HandlerError(rw, req, err)
+			return
+		}
+	    Error(rw, err.Error(), 500)
 	    return
 	}
 	defer osFile.Close()
@@ -68,14 +76,24 @@ func (T *ServerHandlerDynamic) ServeHTTP(rw ResponseWriter, req *Request){
 	if T.exec == nil {
 	    var content, err = ioutil.ReadAll(osFile)
 	    if err != nil {
-	    	Error(rw, fmt.Sprintf("Failed to read the file! Error: %s", err.Error()), 500)
+			//打开文件错误
+			err = fmt.Errorf("Failed to read the file! Error: %s", err.Error())
+			if T.HandlerError != nil {
+				T.HandlerError(rw, req, err)
+				return
+			}
+		    Error(rw, err.Error(), 500)
 	        return
 	    }
 
 	    //解析模板内容
 		err = T.Parse(bytes.NewBuffer(content))
 	    if err != nil {
-	    	Error(rw, err.Error(), 500)
+			if T.HandlerError != nil {
+				T.HandlerError(rw, req, err)
+				return
+			}
+			Error(rw, err.Error(), 500)
 	        return
 	    }
 	}
@@ -97,12 +115,17 @@ func (T *ServerHandlerDynamic) ServeHTTP(rw ResponseWriter, req *Request){
 		dock.Free()
 		if err != nil {
 			if !dock.Writed {
+				//页面代码错误
+				if T.HandlerError != nil {
+					T.HandlerError(rw, req, err)
+					return
+				}
 				Error(rw, err.Error(), 500)
 				return
 			}
 			//原样写入
 			io.WriteString(rw.(io.Writer), err.Error())
-			fmt.Println(err.Error())
+			log.Println(err.Error())
 			return
 		}
 		if !dock.Writed {
