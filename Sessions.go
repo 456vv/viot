@@ -64,7 +64,7 @@ func (T *Sessions) triggerDeadSession(ms *manageSession) (ok bool) {
 func (T *Sessions) GetSession(token string) (Sessioner, bool) {
     mse, ok := T.ss.GetHas(token)
     if !ok {
-    	return nil, ok
+    	return nil, false
     }
     ms := mse.(*manageSession)
 

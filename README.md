@@ -133,9 +133,9 @@ type CloseNotifier interface {                                      // 连接关
 type Launcher interface{}{                                            // 发射，服务器使用当前连接作为客户端给智能设置发送信息
     Launch() RoundTripper                                                   // 发射
 }
-type RoundTripper interface {                                       // 执行一个单一的HTTP事务
-    RoundTrip(*Request) (*Response, error)                                  // 单一的HTTP请求
-    RoundTripContext(ctx context.Context, req *Request) (resp *Response, err error)    // 单一的HTTP请求(上下文)
+type RoundTripper interface {                                       // 执行一个单一的IOT事务
+    RoundTrip(*Request) (*Response, error)                                  // 单一的IOT请求
+    RoundTripContext(ctx context.Context, req *Request) (resp *Response, err error)    // 单一的IOT请求(上下文)
 }
 type Route struct{                                                          // 路由
     HandlerError    func(w ResponseWriter, r *Request)                          // 处理错误的请求
@@ -182,7 +182,7 @@ type HomePool struct {}                                                     // �
     func NewHomePool() *HomePool                                                // 新建
     func (T *HomePool) Close() error                                            // 关闭池
     func (T *HomePool) DelHome(name string)                                     // 删除家
-    func (T *HomePool) NewHome(name string) *Home                               // 创建一个家，如果存在返回已经存在的
+    func (T *HomePool) NewHome(name string) *Home                               // 创建一个家,默认会话超时1小时，如果存在返回已经存在的
     func (T *HomePool) RangeHome(f func(name string, home *Home) bool)          // 迭举家
     func (T *HomePool) SetRecoverSession(d time.Duration)                       // 设置回收无效时间隔（默认1秒）
     func (T *HomePool) Start() error                                            // 启动池
@@ -235,10 +235,11 @@ type ServerHandlerDynamic struct {                                          // �
     Home     *Home                                                              // 家配置
     Context  context.Context                                                    // 上下文
     Plus     map[string]DynamicTemplateFunc                                     // 支持更动态文件类型
+    HandlerError        func(w ResponseWriter, r *Request, err error)           // 接管ServeIOT处理错误
 }
     func (T *ServerHandlerDynamic) Execute(bufw *bytes.Buffer, dock interface{}) (err error)    // 执行模板
     func (T *ServerHandlerDynamic) Parse(bufr *bytes.Buffer) (err error)                        // 解析模板
     func (T *ServerHandlerDynamic) ParseFile(path string) error                                 // 解析模板文件
     func (T *ServerHandlerDynamic) ParseText(content, name string) error                        // 解析模板文本
-    func (T *ServerHandlerDynamic) ServeHTTP(rw http.ResponseWriter, req *http.Request)         // 服务HTTP
+    func (T *ServerHandlerDynamic) ServeIOT(rw http.ResponseWriter, req *http.Request)         // 服务IOT
 ```

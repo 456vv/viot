@@ -28,6 +28,7 @@ func NewHomePool() *HomePool {
 
 
 //NewHome 创建一个家，如果存在返回已经存在的。Sessions 使用默认的设置，你需要修改它。
+//默认创建的 Sessions 会话超时为1小时
 //	name string		家name
 //	*Home			家
 func (T *HomePool) NewHome(name string) *Home {
@@ -36,7 +37,9 @@ func (T *HomePool) NewHome(name string) *Home {
 	}
 	home := &Home{
 		identity:	name,
-		Sessions:	&Sessions{},
+		Sessions:	&Sessions{
+			Expired: time.Hour,
+		},
 		Global: 	vmap.NewMap(),
 	}
 	T.pool.Store(name, home)

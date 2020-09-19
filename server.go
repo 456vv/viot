@@ -239,7 +239,7 @@ func (T *Server) Serve(l net.Listener) error {
 			if T.ConnContext != nil {
 				connCtx, nrw, err = T.ConnContext(ctx, rw)
 				if err != nil {
-					defer rw.CLose()
+					defer rw.Close()
 					T.logf(err.Error())
 					return
 				}
