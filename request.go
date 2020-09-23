@@ -211,7 +211,7 @@ func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
 		Method	: T.Method,
 		Path	: T.RequestURI,
 		Home	: T.Home,
-		Header	: T.Header.clone(),
+		Header	: T.Header.Clone(),
 	}
 	
 	if T.Close {

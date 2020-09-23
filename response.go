@@ -49,7 +49,7 @@ func (T *Response) Write(w io.Writer) error {
 	ir := &ResponseConfig{
 		Nonce	: T.nonce,
 		Status	: T.Status,
-		Header	: T.Header.clone(),
+		Header	: T.Header.Clone(),
 		Body	: T.Body,
 	}
 	return json.NewEncoder(w).Encode(ir)
@@ -63,7 +63,7 @@ func (T *Response) ResponseConfig(nonce string) (riot *ResponseConfig, err error
 	ir := &ResponseConfig{
 		Nonce	: nonce,
 		Status	: T.Status,
-		Header	: T.Header.clone(),
+		Header	: T.Header.Clone(),
 		Body	: T.Body,
 	}
 	return ir, nil

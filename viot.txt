@@ -1,14 +1,14 @@
 const DefaultLineBytes = 1 << 20                                        // 1 MB
 var (
-    ErrBodyNotAllowed   = verror.TrackError("The request method or status code is not allowed")
-    ErrGetBodyed        = verror.TrackError("Does not support repeated reading of body")
-    ErrHijacked         = verror.TrackError("Connection has been hijacked")
-    ErrLaunched         = verror.TrackError("The connection is waiting for the response of the active request")
-    ErrAbortHandler     = verror.TrackError("Abort processing")
-    ErrServerClosed     = verror.TrackError("Server is down")
-    ErrDoned            = verror.TrackError("Has been completed")
-    ErrConnClose        = verror.TrackError("Device connection is closed")
-    ErrReqUnavailable   = verror.TrackError("Request unavailable")
+    ErrBodyNotAllowed   = errors.New("The request method or status code is not allowed")
+    ErrGetBodyed        = errors.New("Does not support repeated reading of body")
+    ErrHijacked         = errors.New("Connection has been hijacked")
+    ErrLaunched         = errors.New("The connection is waiting for the response of the active request")
+    ErrAbortHandler     = errors.New("Abort processing")
+    ErrServerClosed     = errors.New("Server is down")
+    ErrDoned            = errors.New("Has been completed")
+    ErrConnClose        = errors.New("Device connection is closed")
+    ErrReqUnavailable   = errors.New("Request unavailable")
 )
 var (
     ServerContextKey = &contextKey{"iot-server"}                        // 服务器
@@ -48,7 +48,7 @@ type Header map[string]string                                   // 标头
     func (h Header) Set(key, value string)                              // 设置
     func (h Header) Get(key string) string                              // 读取
     func (h Header) Del(key string)                                     // 删除
-    func (h Header) clone() Header                                      // 克隆
+    func (h Header) Clone() Header                                      // 克隆
 func ParseIOTVersion(vers string) (major, minor int, ok bool)           // 解析IOT请求版本
 func ReadRequest(b io.Reader) (req *Request, err error)                 // 读取请求数据
 func ReadResponse(r *bufio.Reader, req *Request) (res *Response, err error) // 读取响应数据
@@ -92,7 +92,6 @@ type Request struct {                                               // 请求
     func (T *Request) GetTokenAuth() (token string, ok bool)                // token验证
     func (T *Request) SetTokenAuth(token string)                            // 设置token验证
     func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error)// 请求，发往设备的请求
-var ErrAbortHandler = errors.New("viot: abort Handler")                     // 错误标头
 type ResponseConfig struct{
     Nonce     string                         `json:"nonce"`
     Status    int                            `json:"status"`
@@ -157,7 +156,7 @@ type Sessions struct {                                                      // �
     Expired      time.Duration                                                  // 保存会话时间
 }
     func (T *Sessions) DelSession(token string)                                 // 使用token删除的会话
-    func (T *Sessions) GetSession(token string) (Sessioner, error)              // 使用token读取会话
+    func (T *Sessions) GetSession(token string) (Sessioner, bool)               // 使用token读取会话
     func (T *Sessions) SetSession(token string, s Sessioner) Sessioner          // 使用token写入新的会话
     func (T *Sessions) Len() int                                                // 数量
     func (T *Sessions) ProcessDeadAll() []interface{}                           // 过期处理
@@ -240,6 +239,3 @@ type ServerHandlerDynamic struct {                                          // �
     func (T *ServerHandlerDynamic) ParseFile(path string) error                                 // 解析模板文件
     func (T *ServerHandlerDynamic) ParseText(content, name string) error                        // 解析模板文本
     func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request)                    // 服务IOT
-
-
-

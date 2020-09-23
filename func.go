@@ -141,7 +141,7 @@ func readRequest(b io.Reader) (req *Request, err error) {
   		req.datab = nil
   	}
   	
-	req.Header		= ij.Header.clone()
+	req.Header		= ij.Header.Clone()
 	for hk, hv := range req.Header {
 		if !httpguts.ValidHeaderFieldName(hk) {
 			return nil, fmt.Errorf("Invalid header name %s", hk)
@@ -188,7 +188,7 @@ func readResponse(b io.Reader) (res *Response, err error) {
 	if riot.Nonce == "" {
 		return nil, fmt.Errorf("The response nonce serial number is\"\"")
 	}
-	res.Header	= riot.Header.clone()
+	res.Header	= riot.Header.Clone()
 	for hk, hv := range res.Header {
 		if !httpguts.ValidHeaderFieldName(hk) {
 			return nil, fmt.Errorf("Invalid title name %s", hk)
