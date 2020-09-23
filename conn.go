@@ -1,12 +1,11 @@
 package viot
 
 import(
-	"github.com/456vv/verror"
 	"io"
 	"bufio"
 	"runtime"
 	"fmt"
-	//"net/http"
+	"errors"
 	"context"
 	"net"
 	"crypto/tls"
@@ -58,9 +57,8 @@ type conn struct {
 	curState atomic.Value						// 当前的连接状态
 	mu sync.Mutex								// 锁
 	hijackedv atomicBool						// 劫持
-	launchedv atomicBool						// 发射
+	//launchedv atomicBool						// 发射
 	activeReq 	map[string]chan *Response		// 主动请求
-	//passiveReq
 	closed		bool							// 关闭
 }
 
@@ -71,9 +69,10 @@ func (T *conn) hijackLocked() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
 	defer T.mu.Unlock()
 
   	//判断主动请求
-  	if T.launchedv.isTrue() {
+  	if T.inLaunch() {
   		return nil, nil, ErrLaunched
   	}
+  	
   	//判断劫持
   	if T.hijackedv.setTrue() {
   		return nil, nil, ErrHijacked
@@ -88,7 +87,7 @@ func (T *conn) hijackLocked() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
   	if T.r.hasByte {
   		if _, err := T.bufr.Peek(T.bufr.Buffered() + 1); err != nil {
   			T.hijackedv.setFalse()
-  			return nil, nil, verror.TrackErrorf("意外的Peek失败读取缓冲的字节: %v", err)
+  			return nil, nil, fmt.Errorf("Unexpected Peek failed to read the buffered bytes: %v", err)
   		}
   	}
   	T.setState(StateHijacked)
@@ -106,8 +105,7 @@ func (T *conn) inLaunch() bool {
 	return len(T.activeReq) != 0
 }
 
-
-//发射
+//发射，同一时间仅接收一台客户端与设备连接，其它上锁等待
 func (T *conn) RoundTrip(req *Request) (resp *Response, err error){
 	return T.RoundTripContext(context.Background(), req)
 }
@@ -135,7 +133,8 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		return nil, err
 	}
 	
-  	T.launchedv.setTrue()
+  	//T.launchedv.setTrue()
+  	
 	
 	//导出设备支持的请求格式
 	riot, err := req.RequestConfig(nonce)
@@ -148,7 +147,7 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 	if err != nil {
 		return nil, err
 	}
-
+	
 	if T.activeReq == nil {
   		T.activeReq = make(map[string]chan *Response)
   	}
@@ -170,7 +169,7 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		return nil, err
 	}
 	if rbn := len(reqByte); n != rbn {
-		return nil, verror.TrackErrorf("实据数据长度 %d，已发送数据长度 %d", rbn, n)
+		return nil, fmt.Errorf("Actual data length %d，Length of sent data %d", rbn, n)
 	}
 	T.bufw.Flush()
 	T.mu.Unlock()
@@ -179,7 +178,7 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 	case <- ctx.Done():
 		return nil, ctx.Err()
 	case <- T.ctx.Done():
-		return nil, verror.TrackErrorf("连接已经关闭: %v", T.ctx.Err())
+		return nil, ErrConnClose
 	case res := <- done:
 		//设备返回一个响应
 		res.Request = req
@@ -247,11 +246,11 @@ func (T *conn) readRequest(ctx context.Context, br io.Reader) (req *Request, err
 	}
 	
 	if req.ProtoMajor != 1 {
-		return nil, verror.TrackError("Unsupported protocol version")
+		return nil, errors.New("Unsupported protocol version")
 	}
 	
 	if req.Home != "" && !httpguts.ValidHostHeader(req.Home) {
-		return nil, verror.TrackError("Malformation Home")
+		return nil, errors.New("Malformation Home")
 	}
 	
 	
@@ -320,7 +319,7 @@ func (T *conn) serve(ctx context.Context) {
 			if isCommonNetReadError(err) {
 				return
 			}
-			T.server.logf(verror.TrackErrorf("从IP(%v)接收到数据读取\"行\"发生错误（%v）", T.remoteAddr, err).Error())
+			T.server.logf(fmt.Errorf("从IP(%v)接收到数据读取\"行\"发生错误（%v）", T.remoteAddr, err).Error())
 			return
 		}
 		//T.server.logf("viot: 从远程IP(%s)读取数据行line:\n%s\n\n", T.remoteAddr, lineBytes)
@@ -336,7 +335,7 @@ func (T *conn) serve(ctx context.Context) {
 			if T.inLaunch() {
 				res, err := T.readResponse(T.ctx, br)
 				if err != nil {
-					T.server.logf(verror.TrackErrorf("从IP(%v)接收到数据读取\"响应\"发生错误（%v）", T.remoteAddr, err).Error())
+					T.server.logf(fmt.Errorf("从IP(%v)接收到数据读取\"响应\"发生错误（%v）", T.remoteAddr, err).Error())
 					return
 				}
 				T.setState(StateActive)
@@ -481,9 +480,9 @@ var connStateInterface = [...]interface{}{
 func (T *conn) idleWait() error {
 	if d := T.server.idleTimeout(); d != 0 {
 		T.rwc.SetReadDeadline(time.Now().Add(d))
-		if _, err := T.bufr.Peek(4); err != nil {
-			return err
-		}
+	}
+	if _, err := T.bufr.Peek(4); err != nil {
+		return err
 	}
 	T.rwc.SetReadDeadline(time.Time{})
 	return nil

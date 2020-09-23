@@ -1,15 +1,12 @@
 package viot
 
 import(
-	"github.com/456vv/verror"
 	"crypto/tls"
 	"net/url"
 	"context"
 	"bytes"
-	//"net/http"
 	"encoding/json"
 	"strings"
-//	"fmt"
 )
 
 //iot接收或发送数据格式带BODY
@@ -47,7 +44,7 @@ func (T *RequestConfig) GetBody() interface{} {
 func (T *RequestConfig) Marshal() ([]byte, error) {
 	b, err := json.Marshal(&requestConfigBody{T, T.body})
 	if err != nil {
-		return nil, verror.TrackError(err)
+		return nil, err
 	}
 	return append(b, '\n'), nil
 }
@@ -59,7 +56,7 @@ func (T *RequestConfig) Unmarshal(data []byte) error {
 	var r requestConfigBody
 	err := json.Unmarshal(data, &r)
 	if err != nil {
-		return verror.TrackError(err)
+		return err
 	}
 	*T 		= *r.RequestConfig
 	T.body	= r.Body
@@ -115,7 +112,7 @@ func (T *Request) GetBody(i interface{}) error {
 	if err == nil {
 		T.datab = nil
 	}	
-	return verror.TrackError(err)
+	return err
 }
 
 // 设置主体

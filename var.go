@@ -1,7 +1,7 @@
 package viot
 
 import(
-	"github.com/456vv/verror"
+	"errors"
 	"time"
 )
 
@@ -11,20 +11,19 @@ const DefaultLineBytes = 1 << 20 // 1 MB
 
 // maxInt32是服务器和传输的字节限制读取器的有效“无限”值。
 const maxInt32 int = 1<<31 - 1
-
 var (
-  	ErrBodyNotAllowed 	= verror.TrackError("请求方法或状态码是不允许")
-	ErrGetBodyed		= verror.TrackError("不支持重复读取body")
-  	ErrHijacked 		= verror.TrackError("连接已经被劫持")
-  	ErrLaunched			= verror.TrackError("连接正在等待主动请求的响应")
-	ErrAbortHandler 	= verror.TrackError("中止处理")
-	ErrServerClosed 	= verror.TrackError("服务器已经关闭")
-	ErrDoned			= verror.TrackError("已经完成")
-	ErrConnClose		= verror.TrackError("设备连接已经关闭")
-	ErrReqUnavailable	= verror.TrackError("请求不可用")
+  	ErrBodyNotAllowed 	= errors.New("The request method or status code is not allowed")
+	ErrGetBodyed		= errors.New("Does not support repeated reading of body")
+  	ErrHijacked 		= errors.New("Connection has been hijacked")
+  	ErrLaunched			= errors.New("The connection is waiting for the response of the active request")
+	ErrAbortHandler 	= errors.New("Abort processing")
+	ErrServerClosed 	= errors.New("Server is down")
+	ErrDoned			= errors.New("Has been completed")
+	ErrConnClose		= errors.New("Device connection is closed")
+	ErrReqUnavailable	= errors.New("Request unavailable")
 )
 var (
-	errTooLarge 		= verror.TrackError("要求数据过大")
+	errTooLarge 		= errors.New("Request data is too large")
 )
 
 

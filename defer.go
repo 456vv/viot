@@ -2,7 +2,7 @@ package viot
 
 import(
     "reflect"
-    "github.com/456vv/verror"
+    "fmt"
 )
 
 //execFunc 执行函数
@@ -30,10 +30,10 @@ func (T *execFunc) add(call interface{}, args ... interface{}) error {
     }
     fvdirect := inDirect(fn)
     if fvdirect.Kind() != reflect.Func {
-        return verror.TrackErrorf("viot: 第一个参数不是有效的func，错误的func类型为 %s。", fvdirect.Kind())
+        return fmt.Errorf("viot: 第一个参数不是有效的func，错误的func类型为 %s。", fvdirect.Kind())
     }
     if fvdirect.IsNil() {
-    	return verror.TrackErrorf("viot: 该函数 %s 还没被初始化，不可以使用！", fn.Type().Name())
+    	return fmt.Errorf("viot: 该函数 %s 还没被初始化，不可以使用！", fn.Type().Name())
     }
 	
     ft 			= fvdirect.Type()
@@ -42,7 +42,7 @@ func (T *execFunc) add(call interface{}, args ... interface{}) error {
     fnargLen 	:= fnInLen - argLen
     if (!variadic && fnInLen != argLen) ||
         variadic && fnInLen > argLen && fnargLen != 1 {
-    	return verror.TrackErrorf("viot: 传入的参数长度与调用函数参数不符合。调用函数参数长度为（%d）,传入参数长度为（%d）。", fnInLen, argLen)
+    	return fmt.Errorf("viot: 传入的参数长度与调用函数参数不符合。调用函数参数长度为（%d）,传入参数长度为（%d）。", fnInLen, argLen)
     }
 	
     fil := fnInLen-1
@@ -54,7 +54,7 @@ func (T *execFunc) add(call interface{}, args ... interface{}) error {
             argIndex =  ft.In(index)
             if argIndex.Kind() == reflect.Interface || argIndex.Kind() == argv.Kind() && argv.Type().ConvertibleTo(argIndex) {
                 if index == fil && argLen != fnInLen {
-                	return verror.TrackErrorf("viot: 传入的参数数量超过了调用函数支持的数量。调用函数参数数量为（%d），传入参数数量为（%d）",  fnInLen, argLen)
+                	return fmt.Errorf("viot: 传入的参数数量超过了调用函数支持的数量。调用函数参数数量为（%d），传入参数数量为（%d）",  fnInLen, argLen)
                 }
             	T.arg = append(T.arg, argv)
                 continue
@@ -83,7 +83,7 @@ func (T *execFunc) add(call interface{}, args ... interface{}) error {
             }
         }
         if typeErr {
-        	return verror.TrackErrorf("viot: 传入参数类型与调用函数参数类型不符，第(%d)个参数，调用函数参数类型为（%s），传入参数类型为（%s）。", index+1, aik, avk)
+        	return fmt.Errorf("viot: 传入参数类型与调用函数参数类型不符，第(%d)个参数，调用函数参数类型为（%s），传入参数类型为（%s）。", index+1, aik, avk)
         }
     }
 	

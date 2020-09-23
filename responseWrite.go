@@ -1,12 +1,10 @@
 package viot
 
 import (
-	"github.com/456vv/verror"
-	//"fmt"
 	"net"
 	"bufio"
 	"sync/atomic"
-//	"context"
+	"errors"
 )
 
 
@@ -163,7 +161,7 @@ func (T *responseWrite) done() error {
 //	err error				错误
 func (T *responseWrite) Hijack() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
 	if T.handlerDone.isTrue() {
-		return nil, nil, verror.TrackErrorf("响应处理完成，不允许再调用Hijack")
+		return nil, nil, errors.New("The response processing is complete, no more calls to Hijack are allowed")
   	}
   	
   	return T.conn.hijackLocked()

@@ -64,5 +64,5 @@ func (T *Route) ServeIOT(w ResponseWriter, r *Request){
 	//默认的错误处理
 	w.Status(404)
 	w.Header().Set("Connection","close")
-	w.SetBody(fmt.Sprintf("不存在该路径（%s）", r.URL.Path))
+	w.SetBody(fmt.Sprintf("The path does not exist %s", r.URL.Path))
 }

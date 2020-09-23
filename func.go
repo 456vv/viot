@@ -1,7 +1,7 @@
 package viot
 	
 import(
-	"github.com/456vv/verror"
+	"fmt"
 	"bytes"
 	"strings"
 	"bufio"
@@ -118,22 +118,22 @@ func readRequest(b io.Reader) (req *Request, err error) {
 	var ij RequestConfig
 	err = json.NewDecoder( io.TeeReader(bufr, req.datab) ).Decode(&ij)
 	if err != nil {
-		return nil, verror.TrackErrorf("请求 json 内容格式不正确 %v", err)
+		return nil, fmt.Errorf("Incorrect format of request content %v", err)
 	}
 	if ij.Nonce == "" {
-		return nil, verror.TrackErrorf("请求 nonce 序号不能为\"\"")
+		return nil, fmt.Errorf("The request nonce serial number cannot be\"\"")
 	}
 	if !validMethod(ij.Method) {
-		return nil, verror.TrackErrorf("请求无效的方法 %q", ij.Method)
+		return nil, fmt.Errorf("Request invalid method %q", ij.Method)
 	}
 	
 	var ok bool
 	if req.ProtoMajor, req.ProtoMinor, ok = ParseIOTVersion(ij.Proto); !ok {
-		return nil, verror.TrackErrorf("请求格式错误的IOT版本 %q", ij.Proto)
+		return nil, fmt.Errorf("IOT version with incorrect request format %q", ij.Proto)
 	}
 	
 	if req.URL, err = url.ParseRequestURI(ij.Path); err != nil {
-		return nil, verror.TrackError(err)
+		return nil,  err
   	}
   	
   	//释放内存，仅POST提交才支持body
@@ -144,10 +144,10 @@ func readRequest(b io.Reader) (req *Request, err error) {
 	req.Header		= ij.Header.clone()
 	for hk, hv := range req.Header {
 		if !httpguts.ValidHeaderFieldName(hk) {
-			return nil, verror.TrackErrorf("无效的标头名称 %s", hk)
+			return nil, fmt.Errorf("Invalid header name %s", hk)
 		}
 		if !httpguts.ValidHeaderFieldValue(hv) {
-			return nil, verror.TrackErrorf("无效的标头值 %s", hv)
+			return nil, fmt.Errorf("Invalid header value %s", hv)
 		}
 	}
   	req.nonce		= ij.Nonce
@@ -182,19 +182,19 @@ func readResponse(b io.Reader) (res *Response, err error) {
 	var riot ResponseConfig
 	err = json.NewDecoder( b ).Decode(&riot)
 	if err != nil {
-		return nil, verror.TrackErrorf("响应 json 内容格式不正确 %v", err)
+		return nil, fmt.Errorf("Incorrect response content format %v", err)
 	}
 	
 	if riot.Nonce == "" {
-		return nil, verror.TrackErrorf("响应 nonce 序号为\"\"")
+		return nil, fmt.Errorf("The response nonce serial number is\"\"")
 	}
 	res.Header	= riot.Header.clone()
 	for hk, hv := range res.Header {
 		if !httpguts.ValidHeaderFieldName(hk) {
-			return nil, verror.TrackErrorf("无效的标题名称 %s", hk)
+			return nil, fmt.Errorf("Invalid title name %s", hk)
 		}
 		if !httpguts.ValidHeaderFieldValue(hv) {
-			return nil, verror.TrackErrorf("无效的标题值 %s", hv)
+			return nil, fmt.Errorf("Invalid header value %s", hv)
 		}
 	}
 	res.nonce 	= riot.Nonce
@@ -341,12 +341,12 @@ func Nonce() (nonce string, err error) {
 	//创建编号
 	bigInt, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt32))
 	if err != nil {
-		return "", verror.TrackErrorf("创建 nonce 编号失败 %v", err)
+		return "", fmt.Errorf("create nonce numbering failed %v", err)
 	}
 	//提取编号
 	d, err := bigInt.MarshalText()
 	if err != nil {
-		return "", verror.TrackErrorf("提取 nonce 编号失败 %v", err)
+		return "", fmt.Errorf("extract nonce numbering failed %v", err)
 	}
 	return string(d), nil
 }

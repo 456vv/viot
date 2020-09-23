@@ -1,13 +1,10 @@
 package viot
 
 import(
-	//"net/http"
-	"github.com/456vv/verror"
 	"github.com/456vv/vmap/v2"
 	"time"
 	"reflect"
 	"encoding/json"
-//	"fmt"
 )
 
 type chunkWriter struct {
@@ -87,7 +84,6 @@ func (T *chunkWriter) done() error {
 	T.fulfil = true
 	
   	T.generateResponse()//写入
-  	err := json.NewEncoder(T.res.conn.bufw).Encode(T.data)
-  	return verror.TrackError(err)
+  	return json.NewEncoder(T.res.conn.bufw).Encode(T.data)
 }
 
