@@ -14,8 +14,8 @@ var (
     ServerContextKey = &contextKey{"iot-server"}                        // 服务器
     LocalAddrContextKey = &contextKey{"local-addr"}                     // 监听地址
 )
-var TemplateFunc = map[string]interface{...}                            // 模板函数映射
-
+var TemplateFunc = make(template.FuncMap)                               // 模板函数映射
+func ExtendTemplatePackage(pkgName string, deputy template.FuncMap)     // 扩展函数
 type Handler interface {                                        // 处理函数接口
     ServeIOT(ResponseWriter, *Request)                                  // 处理
 }
@@ -54,7 +54,6 @@ func ReadRequest(b io.Reader) (req *Request, err error)                 // 读�
 func ReadResponse(r *bufio.Reader, req *Request) (res *Response, err error) // 读取响应数据
 func Nonce() (nonce string, err error)                                  // 生成编号
 func Error(w ResponseWriter, err string, code int)                      // 快速设置错误
-
 type RequestConfig struct{                                         // iot接收或发送数据格式
     Nonce   string          `json:"nonce"`//-,omitempty,string,number,boolean
     Proto   string          `json:"proto"`

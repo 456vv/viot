@@ -3,12 +3,12 @@ import(
     "reflect"
     "fmt"
    "github.com/456vv/vweb/v2/builtin"
+    "text/template"
 )
 
 /*
 注：如果你要使用更高级的功能，需要更新标准库源代码。
 */
-
 
 func templateFuncMapError(v interface{}) error {
     if errs, ok := v.([]reflect.Value); ok {
@@ -71,8 +71,16 @@ func call(f interface{}, args ...interface{}) ([]interface{}, error){
 }
 
 // 模板函数映射
-var TemplateFunc = map[string]interface{}{
-	"Import": func(pkgName string) map[string]interface{} {return dotPackage[pkgName]},
+var TemplateFunc = make(template.FuncMap)
+
+func init(){
+	for name, fun  := range builtins() {
+		TemplateFunc[name]=fun
+	}
+}
+func builtins() template.FuncMap {
+return template.FuncMap{
+	"Import": func(pkgName string) template.FuncMap {return dotPackage[pkgName]},
     "GoTypeTo":builtin.GoTypeTo,
     "Value":builtin.Value,						//Value(v) reflect.Value
 	"_Value_":func(s []reflect.Value, v ...reflect.Value) []reflect.Value {return append(s, v...)},
@@ -224,6 +232,7 @@ var TemplateFunc = map[string]interface{}{
     "NotError": func(v interface{}) bool {
        return templateFuncMapError(v) == nil
     },
+}
 }
 
 
