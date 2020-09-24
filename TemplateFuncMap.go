@@ -71,15 +71,7 @@ func call(f interface{}, args ...interface{}) ([]interface{}, error){
 }
 
 // 模板函数映射
-var TemplateFunc = make(template.FuncMap)
-
-func init(){
-	for name, fun  := range builtins() {
-		TemplateFunc[name]=fun
-	}
-}
-func builtins() template.FuncMap {
-return template.FuncMap{
+var TemplateFunc = template.FuncMap{
 	"Import": func(pkgName string) template.FuncMap {return dotPackage[pkgName]},
     "GoTypeTo":builtin.GoTypeTo,
     "Value":builtin.Value,						//Value(v) reflect.Value
@@ -232,7 +224,6 @@ return template.FuncMap{
     "NotError": func(v interface{}) bool {
        return templateFuncMapError(v) == nil
     },
-}
 }
 
 

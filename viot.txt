@@ -14,7 +14,7 @@ var (
     ServerContextKey = &contextKey{"iot-server"}                        // 服务器
     LocalAddrContextKey = &contextKey{"local-addr"}                     // 监听地址
 )
-var TemplateFunc = make(template.FuncMap)                               // 模板函数映射
+var TemplateFunc = template.FuncMap{...}                                // 模板函数映射
 func ExtendTemplatePackage(pkgName string, deputy template.FuncMap)     // 扩展函数
 type Handler interface {                                        // 处理函数接口
     ServeIOT(ResponseWriter, *Request)                                  // 处理
