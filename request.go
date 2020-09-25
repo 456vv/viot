@@ -7,6 +7,7 @@ import(
 	"bytes"
 	"encoding/json"
 	"strings"
+	"fmt"
 )
 
 //iot接收或发送数据格式带BODY
@@ -73,7 +74,7 @@ type Request struct {
 	Method		string														// 方法
 	RequestURI	string														// 请求URL
 	URL 		*url.URL													// 路径
-    Proto      	string														// 协议
+    Proto      	string														// 协议，默认IOT/1.1
     ProtoMajor 	int															// 协议大版号
     ProtoMinor 	int															// 协议小版号
 	Header 		Header														// 标头
@@ -205,12 +206,42 @@ func (T *Request) SetTokenAuth(token string) {
 //	riot *RequestConfig	发往设备的请求
 //	err error			错误
 func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
+
+	home := T.Home
+	path := T.RequestURI
+	if T.URL != nil {
+		if home == "" {
+			home = T.URL.Host
+		}
+		if path == "" {
+			path = T.URL.RequestURI()
+		}
+	}
+	if home == "" {
+		return nil, ErrHomeInvalid
+	}
+	if path == "" {
+		return nil, ErrURIInvalid
+	}
+	
+	proto := T.Proto
+	if proto == "" {
+		if !T.ProtoAtLeast(1, 0) {
+			return nil, ErrProtoInvalid
+		}
+		proto = fmt.Sprintf("IOT/%d.%d", T.ProtoMajor, T.ProtoMinor)
+	}
+	
+	if T.Method == "" {
+		return nil, ErrMethodInvalid
+	}
+	
 	riot = &RequestConfig{
 		Nonce	: nonce,
-		Proto	: T.Proto,
+		Proto	: proto,
 		Method	: T.Method,
-		Path	: T.RequestURI,
-		Home	: T.Home,
+		Path	: path,
+		Home	: home,
 		Header	: T.Header.Clone(),
 	}
 	

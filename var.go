@@ -21,6 +21,11 @@ var (
 	ErrDoned			= errors.New("Has been completed")
 	ErrConnClose		= errors.New("Device connection is closed")
 	ErrReqUnavailable	= errors.New("Request unavailable")
+	
+	ErrHomeInvalid		= errors.New("viot: Home invalid")
+	ErrURIInvalid		= errors.New("viot: URI invalid")
+	ErrProtoInvalid		= errors.New("viot: Proto Invalid")
+	ErrMethodInvalid	= errors.New("viot: Method Invalid")
 )
 var (
 	errTooLarge 		= errors.New("Request data is too large")

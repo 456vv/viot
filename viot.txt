@@ -238,3 +238,17 @@ type ServerHandlerDynamic struct {                                          // �
     func (T *ServerHandlerDynamic) ParseFile(path string) error                                 // 解析模板文件
     func (T *ServerHandlerDynamic) ParseText(content, name string) error                        // 解析模板文本
     func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request)                    // 服务IOT
+type Client struct{
+	Dialer				vconnpool.Dialer										// 拨号
+	Home				string													// Home
+	Addr				string													// 服务器地址
+	WriteDeadline		time.Duration											// 写入连接超时
+	ReadDeadline		time.Duration											// 读取连接超时
+}
+	func (T *Client) Get(url string, header Header) (resp *Response, err error)								// 快速读取
+	func (T *Client) GetCtx(ctx context.Context, urlstr string, header Header) (resp *Response, err error)	// 快速读取（上下文）
+	func (T *Client) Do(req *Request) (resp *Response, err error)											// 自定义请求
+	func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err error)					// 自定义请求（上下文）
+	func (T *Client) Post(url string, header Header, body interface{}) (resp *Response, err error)			// 快速提交
+	func (T *Client) PostCtx(ctx context.Context, urlstr string, header Header, body interface{})			// 快速提交（上下文）
+
