@@ -12,7 +12,6 @@ import(
 
 type Client struct{
 	Dialer				vconnpool.Dialer	//拨号
-	Home				string				//Home
 	Addr				string				//服务器地址
 	WriteDeadline		time.Duration		//写入连接超时
 	ReadDeadline		time.Duration		//读取连接超时
