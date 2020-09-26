@@ -12,6 +12,7 @@ import(
 
 type Client struct{
 	Dialer				vconnpool.Dialer	//拨号
+	Home				string				//Home
 	Addr				string				//服务器地址
 	WriteDeadline		time.Duration		//写入连接超时
 	ReadDeadline		time.Duration		//读取连接超时
@@ -76,13 +77,15 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 			err = ctx.Err()
 		}
 	}()
-
+	
+	if req.Home == "" {
+		req.Home = T.Home
+	}
 	//生成编号
 	nonce, err := Nonce()
 	if err != nil {
 		return nil, err
 	}
-
 	//导出IOT支持的格式
 	riot, err := req.RequestConfig(nonce)
 	if err != nil {
@@ -114,7 +117,7 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 			netConn.Close()
 		}
 	}()
-
+	
 	//写入
 	if T.WriteDeadline != 0 {
 		if err := netConn.SetWriteDeadline(time.Now().Add(T.WriteDeadline)); err != nil {
@@ -142,7 +145,7 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 //	resp *Response			响应
 //	err error				错误
 func (T *Client) Post(url string, header Header, body interface{}) (resp *Response, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second * 8))
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	return T.PostCtx(ctx, url, header, body)
 
