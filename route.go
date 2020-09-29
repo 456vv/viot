@@ -27,10 +27,13 @@ func (T *Route) HandleFunc(url string,  handler func(w ResponseWriter, r *Reques
 //	w ResponseWriter    响应
 //	r *Request          请求
 func (T *Route) ServeIOT(w ResponseWriter, r *Request){
+	path := r.URL.Path
 	inf, ok := T.rt.Load(r.URL.Path)
 	if ok {
 		inf.(Handler).ServeIOT(w, r)
-		return
+		if path == r.URL.Path {
+			return
+		}
 	}else{
 		var handleFunc Handler
 		T.rt.Range(func(k, v interface{}) bool {
@@ -51,7 +54,9 @@ func (T *Route) ServeIOT(w ResponseWriter, r *Request){
 		});
 		if ok {
 			handleFunc.ServeIOT(w, r)
+			if path == r.URL.Path {
 			return
+		}
 		}
 	}
 	
@@ -64,5 +69,5 @@ func (T *Route) ServeIOT(w ResponseWriter, r *Request){
 	//默认的错误处理
 	w.Status(404)
 	w.Header().Set("Connection","close")
-	w.SetBody(fmt.Sprintf("The path does not exist %s", r.URL.Path))
+	w.SetBody(fmt.Sprintf("The path does not exist %s", path))
 }
