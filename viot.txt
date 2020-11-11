@@ -105,7 +105,7 @@ type Response struct{                                               // 响应
     Request    *Request                                                     // 请求
     RemoteAddr string                                                       // 远程IP
 }
-    func (T *Response) SetNonce(n string)                                   // 读取编号
+    func (T *Response) SetNonce(n string)                                   // 设置编号
     func (T *Response) WriteTo(w ResponseWriter)                            // 写入到
     func (T *Response) Write(w io.Writer) error                             // 写入w
     func (T *Response) ResponseConfig(nonce string) (riot *ResponseConfig, err error)// 响应，接收设备的响应
