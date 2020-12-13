@@ -59,7 +59,7 @@ func Test_Response_Write(t *testing.T){
 	if err := resp.Write(w); err != nil {
 		t.Fatal(err)
 	}
-	var ir ResponseIOT
+	var ir ResponseConfig
 	if err := json.NewDecoder(w).Decode(&ir); err != nil {
 		t.Fatal(err)
 	}

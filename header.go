@@ -23,7 +23,7 @@ func (h Header) Del(key string) {
 }
 
 //克隆
-func (h Header) clone() Header {
+func (h Header) Clone() Header {
 	header := make(Header)
 	for key, val := range h {
 		header.Set(key, val)

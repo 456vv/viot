@@ -1,12 +1,11 @@
 package viot
 
 import(
-	"github.com/456vv/verror"
 	"io"
 	"bufio"
 	"runtime"
 	"fmt"
-	//"net/http"
+	"errors"
 	"context"
 	"net"
 	"crypto/tls"
@@ -20,9 +19,11 @@ import(
 //initNPNRequest==================================================================================================================================
 //NPN请求
 type initNPNRequest struct {
+	ctx context.Context		// 上下文
   	srv *Server				// 上级
   	c *tls.Conn				// 连接
 }
+func (T initNPNRequest) BaseContext() context.Context { return T.ctx }
 
 //服务接口
 func (T initNPNRequest) ServeIOT(rw ResponseWriter, req *Request) {
@@ -56,9 +57,8 @@ type conn struct {
 	curState atomic.Value						// 当前的连接状态
 	mu sync.Mutex								// 锁
 	hijackedv atomicBool						// 劫持
-	launchedv atomicBool						// 发射
+	//launchedv atomicBool						// 发射
 	activeReq 	map[string]chan *Response		// 主动请求
-	//passiveReq
 	closed		bool							// 关闭
 }
 
@@ -69,9 +69,10 @@ func (T *conn) hijackLocked() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
 	defer T.mu.Unlock()
 
   	//判断主动请求
-  	if T.launchedv.isTrue() {
+  	if T.inLaunch() {
   		return nil, nil, ErrLaunched
   	}
+  	
   	//判断劫持
   	if T.hijackedv.setTrue() {
   		return nil, nil, ErrHijacked
@@ -86,7 +87,7 @@ func (T *conn) hijackLocked() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
   	if T.r.hasByte {
   		if _, err := T.bufr.Peek(T.bufr.Buffered() + 1); err != nil {
   			T.hijackedv.setFalse()
-  			return nil, nil, verror.TrackErrorf("意外的Peek失败读取缓冲的字节: %v", err)
+  			return nil, nil, fmt.Errorf("Unexpected Peek failed to read the buffered bytes: %v", err)
   		}
   	}
   	T.setState(StateHijacked)
@@ -104,8 +105,7 @@ func (T *conn) inLaunch() bool {
 	return len(T.activeReq) != 0
 }
 
-
-//发射
+//发射，同一时间仅接收一台客户端与设备连接，其它上锁等待
 func (T *conn) RoundTrip(req *Request) (resp *Response, err error){
 	return T.RoundTripContext(context.Background(), req)
 }
@@ -127,15 +127,17 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		return nil, ErrReqUnavailable
 	}
 	
-  	T.launchedv.setTrue()
 
 	nonce, err := Nonce()
 	if err != nil {
 		return nil, err
 	}
 	
+  	//T.launchedv.setTrue()
+  	
+	
 	//导出设备支持的请求格式
-	riot, err := req.RequestIOT(nonce)
+	riot, err := req.RequestConfig(nonce)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +147,7 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 	if err != nil {
 		return nil, err
 	}
-
+	
 	if T.activeReq == nil {
   		T.activeReq = make(map[string]chan *Response)
   	}
@@ -160,13 +162,14 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 	if d := T.server.WriteTimeout; d != 0 {
   		T.rwc.SetWriteDeadline(time.Now().Add(d))
   	}
-
+	
+	//客户发送一个请求到设备
 	n, err := T.bufw.Write(reqByte)
 	if err != nil {
 		return nil, err
 	}
 	if rbn := len(reqByte); n != rbn {
-		return nil, verror.TrackErrorf("实据数据长度 %d，已发送数据长度 %d", rbn, n)
+		return nil, fmt.Errorf("Actual data length %d，Length of sent data %d", rbn, n)
 	}
 	T.bufw.Flush()
 	T.mu.Unlock()
@@ -175,8 +178,9 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 	case <- ctx.Done():
 		return nil, ctx.Err()
 	case <- T.ctx.Done():
-		return nil, verror.TrackErrorf("连接已经关闭: %v", T.ctx.Err())
+		return nil, ErrConnClose
 	case res := <- done:
+		//设备返回一个响应
 		res.Request = req
 		return res, nil
 	}
@@ -224,8 +228,6 @@ func (T *conn) readResponse(ctx context.Context, br io.Reader) (res *Response, e
 	res.RemoteAddr	= T.remoteAddr
 	return
 }
-
-
   
 //解析请求
 func (T *conn) readRequest(ctx context.Context, br io.Reader) (req *Request, err error) {
@@ -244,11 +246,11 @@ func (T *conn) readRequest(ctx context.Context, br io.Reader) (req *Request, err
 	}
 	
 	if req.ProtoMajor != 1 {
-		return nil, verror.TrackError("不受支持的协议版本")
+		return nil, errors.New("Unsupported protocol version")
 	}
 	
 	if req.Home != "" && !httpguts.ValidHostHeader(req.Home) {
-		return nil, verror.TrackError("畸形的 Home")
+		return nil, errors.New("Malformation Home")
 	}
 	
 	
@@ -257,8 +259,6 @@ func (T *conn) readRequest(ctx context.Context, br io.Reader) (req *Request, err
 	req.TLS			= T.tlsState
 	return
 }
-
-	
 
 //服务
 func (T *conn) serve(ctx context.Context) {
@@ -278,43 +278,40 @@ func (T *conn) serve(ctx context.Context) {
 	}()
 	//T.server.logf("viot: 远程IP(%s)连接网络\n", T.remoteAddr)
 
-//	if tlsConn, ok := T.rwc.(*tls.Conn); ok {
-//		//这里等验证，暂时用不上
-//		//意思就是暂时不支持TLS
-//		if d := T.server.ReadTimeout; d != 0 {
-//			T.rwc.SetReadDeadline(time.Now().Add(d))
-//		}
-//		if d := T.server.WriteTimeout; d != 0 {
-//			T.rwc.SetWriteDeadline(time.Now().Add(d))
-//		}
-//		if err := tlsConn.Handshake(); err != nil {
-//			T.server.logf("viot: TLS handshake error from %s: %v", T.rwc.RemoteAddr(), err)
-//			return
-//		}
-//		T.tlsState = new(tls.ConnectionState)
-//		*T.tlsState = tlsConn.ConnectionState()
-//		//待验证证书请求的协议
-//		if proto := T.tlsState.NegotiatedProtocol; validNPN(proto) {
-//			if fn := T.server.TLSNextProto[proto]; fn != nil {
-//				h := initNPNRequest{T.server, tlsConn}
-//				fn(T.server, tlsConn, h)
-//			}
-//			return
-//		}
-//	}
-	
+	if tlsConn, ok := T.rwc.(*tls.Conn); ok {
+		if d := T.server.ReadTimeout; d != 0 {
+			T.rwc.SetReadDeadline(time.Now().Add(d))
+		}
+		if d := T.server.WriteTimeout; d != 0 {
+			T.rwc.SetWriteDeadline(time.Now().Add(d))
+		}
+		if err := tlsConn.Handshake(); err != nil {
+			T.server.logf("viot: 来自的TLS握手错误 %s: %v", T.rwc.RemoteAddr(), err)
+			return
+		}
+		T.tlsState = new(tls.ConnectionState)
+		*T.tlsState = tlsConn.ConnectionState()
+		//待验证证书请求的协议
+		//NegotiatedProtocol 是客户端携带过来的
+		//TLSNextProto 是服务处理该协议的
+		if proto := T.tlsState.NegotiatedProtocol; validNPN(proto) {
+			if fn := T.server.TLSNextProto[proto]; fn != nil {
+				h := initNPNRequest{ctx, T.server, tlsConn}
+				fn(T.server, tlsConn, h)
+			}
+			return
+		}
+	}
 	//JSON格式
-	
 	T.r 	= &connReader{conn:T}
 	T.bufr 	= newBufioReader(T.r)
-	T.bufw 	= newBufioWriterSize(checkConnErrorWriter{T}, 4<<10)
-	
+	T.bufw 	= newBufioWriterSize(connWriter{conn:T}, 4<<10)
 	
 	T.ctx, T.cancelCtx = context.WithCancel(ctx)
 	defer T.cancelCtx()
 	for {
-		if !T.server.doKeepAlives() {
-			//我们正处于关机模式。 
+		if T.server.shuttingDown() {
+			//服务器已经下线
 			return
 		}
 		lineBytes, err := T.readLineBytes()
@@ -322,25 +319,23 @@ func (T *conn) serve(ctx context.Context) {
 			if isCommonNetReadError(err) {
 				return
 			}
-			T.server.logf(verror.TrackErrorf("从IP(%v)接收到数据读取\"行\"发生错误（%v）", T.remoteAddr, err).Error())
+			T.server.logf(fmt.Errorf("从IP(%v)接收到数据读取\"行\"发生错误（%v）", T.remoteAddr, err).Error())
 			return
 		}
 		//T.server.logf("viot: 从远程IP(%s)读取数据行line:\n%s\n\n", T.remoteAddr, lineBytes)
-		
 		//空行跳过
 		if len(lineBytes) == 0 {
 			continue
 		}
 		br 		:= bytes.NewReader(lineBytes)
-		isReq 	:= bytes.Contains(lineBytes, []byte("\"proto\":"))
-		
+		isReq 	:= bytes.Contains(lineBytes, []byte("\"proto\":\"IOT/"))
 		//主动向设备发送请求
 		//等待设备响应信息
 		if !isReq {
 			if T.inLaunch() {
 				res, err := T.readResponse(T.ctx, br)
 				if err != nil {
-					T.server.logf(verror.TrackErrorf("从IP(%v)接收到数据读取\"响应\"发生错误（%v）", T.remoteAddr, err).Error())
+					T.server.logf(fmt.Errorf("从IP(%v)接收到数据读取\"响应\"发生错误（%v）", T.remoteAddr, err).Error())
 					return
 				}
 				T.setState(StateActive)
@@ -351,6 +346,10 @@ func (T *conn) serve(ctx context.Context) {
 					case cres <- res:
 						delete(T.activeReq, res.nonce)
 					}
+				}else{
+					//无法认识该序号
+					T.mu.Unlock()
+					return
 				}
 				T.mu.Unlock()
 				
@@ -372,8 +371,9 @@ func (T *conn) serve(ctx context.Context) {
 		//被动得到设备发来请求
 		//等待服务器响应信息
 		req, err := T.readRequest(T.ctx, br)
+
 		if err != nil {
-			fmt.Fprintf(T.rwc, `{"body":%q,"header":{"Connection": "close"},"nonce":"-1","status":400}`,"Bad Request: "+err.Error())
+			fmt.Fprintf(T.rwc, `{"body":%q,"header":{"Connection": "close"},"nonce":"-1","status":400}\n`,"Bad Request: "+err.Error())
 			T.closeWriteAndWait()
 			return
 		}
@@ -385,11 +385,12 @@ func (T *conn) serve(ctx context.Context) {
 			header			: make(Header),
 			closeNotifyCh	: make(chan bool, 1),
 		}
-		w.cw.res = w // w.cw = chunkWriter{w}
+		w.cw.res = w
 		T.curReq.Store(req)
 		T.curRes.Store(w)
 				
 		//后台接收数据
+		//目的是实时检测连接状态是否可用
 		T.r.startBackgroundRead()
 		
 		//设置写入超时时间
@@ -420,13 +421,17 @@ func (T *conn) serve(ctx context.Context) {
 			return
 		}
 		
+		//不支持长连接或服务器已经下线
+		if !T.server.doKeepAlives() {
+			return
+		}
+		
 		T.setState(StateIdle)
 		
 		if err = T.idleWait(); err != nil {
 			//等待数据，读取超时就退出
 			return
 		}
-
 	}
 }
 
@@ -475,9 +480,9 @@ var connStateInterface = [...]interface{}{
 func (T *conn) idleWait() error {
 	if d := T.server.idleTimeout(); d != 0 {
 		T.rwc.SetReadDeadline(time.Now().Add(d))
-		if _, err := T.bufr.Peek(4); err != nil {
-			return err
-		}
+	}
+	if _, err := T.bufr.Peek(4); err != nil {
+		return err
 	}
 	T.rwc.SetReadDeadline(time.Time{})
 	return nil
@@ -533,18 +538,18 @@ func (T *conn) Close() {
  	T.setState(StateClosed)
 }
 
-//checkConnErrorWriter==================================================================================================================================
+//connWriter==================================================================================================================================
 //检查写入错误
-type checkConnErrorWriter struct {
-	c *conn																	// 上级
+type connWriter struct {
+	conn *conn																	// 上级
 }
 //写入
-func (T checkConnErrorWriter) Write(p []byte) (n int, err error) {
-	n, err = T.c.rwc.Write(p)
-	if err != nil && T.c.werr == nil {
-		T.c.werr = err
-		T.c.server.logf("viot: 远程IP(%s)数据写入失败error(%s)，预写入data(%s)\n", T.c.remoteAddr, err, p)
-		T.c.cancelCtx()	//取消当前连接的上下文
+func (T connWriter) Write(p []byte) (n int, err error) {
+	n, err = T.conn.rwc.Write(p)
+	if err != nil && T.conn.werr == nil {
+		T.conn.werr = err
+		T.conn.server.logf("viot: 远程IP(%s)数据写入失败error(%s)，预写入data(%s)\n", T.conn.remoteAddr, err, p)
+		T.conn.cancelCtx()	//取消当前连接的上下文
 	}
 	return
 }

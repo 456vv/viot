@@ -116,7 +116,7 @@ func Test_chunkWriter_Body(t *testing.T) {
 	}
 	cw.res.conn.bufw.Flush()
 	
-	var ir ResponseIOT
+	var ir ResponseConfig
 	err = json.NewDecoder(bytesBuffer).Decode(&ir)
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +153,7 @@ func Test_chunkWriter_done(t *testing.T) {
 	}
 	cw.res.conn.bufw.Flush()
 	
-	var ir ResponseIOT
+	var ir ResponseConfig
 	err = json.NewDecoder(bytesBuffer).Decode(&ir)
 	if err != nil {
 		t.Fatal(err)

@@ -63,7 +63,7 @@ func Test_conn_readLineBytes(t *testing.T){
 		}
 		c.r 	= &connReader{conn:c}
 		c.bufr 	= newBufioReader(c.r)
-		c.bufw 	= newBufioWriterSize(checkConnErrorWriter{c}, 4<<10)
+		c.bufw 	= newBufioWriterSize(connWriter{conn:c}, 4<<10)
 		
 		c.ctx, c.cancelCtx = context.WithCancel(context.Background())
 		
@@ -129,7 +129,7 @@ func Test_conn_readRequest(t *testing.T){
 		}
 		c.r 	= &connReader{conn:c}
 		c.bufr 	= newBufioReader(c.r)
-		c.bufw 	= newBufioWriterSize(checkConnErrorWriter{c}, 4<<10)
+		c.bufw 	= newBufioWriterSize(connWriter{conn:c}, 4<<10)
 		
 		ctx, cancelCtx := context.WithCancel(context.Background())
 		c.cancelCtx = cancelCtx
@@ -204,7 +204,7 @@ func Test_conn_serve1(t *testing.T){
 			t.Fatalf("预测 %v, 发送 %v", len(b), n)
 		}
 		time.Sleep(time.Second)
-		var riot ResponseIOT
+		var riot ResponseConfig
 		err = json.NewDecoder(netConn).Decode(&riot)
 		if err != nil {
 			t.Fatalf("读取错误：%v",err)
@@ -280,8 +280,8 @@ func Test_conn_serve2(t *testing.T){
 		}
 		
 		//->
-		var riotb = requestIOTBody{
-			RequestIOT: &RequestIOT{Nonce:"1",
+		var riotb = requestConfigBody{
+			RequestConfig: &RequestConfig{Nonce:"1",
 				Proto:"IOT/1.1",
 				Method:"POST",
 				Header:Header{"Connection":"keep-alive"},
@@ -295,7 +295,7 @@ func Test_conn_serve2(t *testing.T){
 			t.Fatal(err)
 		}
 		//得到响应
-		var riot ResponseIOT
+		var riot ResponseConfig
 		err = json.NewDecoder(netConn).Decode(&riot)
 		if err != nil {
 			t.Fatal(err)
@@ -307,7 +307,7 @@ func Test_conn_serve2(t *testing.T){
 		
 		//->
 		//得到请求
-		var riotb1 requestIOTBody
+		var riotb1 requestConfigBody
 		err = json.NewDecoder(netConn).Decode(&riotb1)
 		if err != nil {
 			t.Fatal(err)
@@ -358,11 +358,7 @@ func Test_conn_serve2(t *testing.T){
 		}
 		c.server.Handler=HandlerFunc(func(w ResponseWriter, r *Request){
 			if _, ok := iotRes[r.RemoteAddr]; !ok {
-				launch, err := w.(Launcher).Launch()
-				if err != nil {
-					t.Fatal(err)
-					return
-				}
+				launch := w.(Launcher).Launch()
 				iotRes[r.RemoteAddr] = launch
 				go iotLaunch(r.RemoteAddr, r)
 			}

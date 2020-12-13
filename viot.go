@@ -3,6 +3,7 @@ package viot
 import(
 	"sync/atomic"
 	"io"
+	"text/template"
 )
 
 //上下文的Key，在请求中可以使用
@@ -23,6 +24,8 @@ type noBody struct{}
 func (T *noBody) Decode(i interface{}) error {return io.EOF}
 
 
+// 点函数映射
+var dotPackage = make(map[string]template.FuncMap)
 
 
 

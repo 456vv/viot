@@ -58,7 +58,7 @@ func Test_server_closeListeners(t *testing.T){
 		t.Fatal(err)
 	}
 	s := &Server{}
-	s.trackListener(l, true)
+	s.trackListener(&l, true)
 	err = s.closeListeners()
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +101,7 @@ func Test_server_Serve(t *testing.T){
 			nonce string
 			body interface{}
 		}{
-			{status:400, nonce:"-1", sand:"{\"a\":\"a1\", \"nonce\":\"1\", \"proto\":\"1\"}\n"},
+			{status:400, nonce:"-1", sand:"{\"a\":\"a1\", \"nonce\":\"1\", \"proto\":\"IOT/1.1\"}\n"},
 			{status:200, nonce:"1", body:"1", sand:"{\"nonce\":\"1\", \"proto\":\"IOT/1.1\", \"header\":{}, \"method\":\"POST\", \"path\":\"/a\", \"home\":\"a.com\", \"body\":\"1\"}\n"},
 			{status:200, nonce:"2", body:float64(2), sand:"{\"nonce\":\"2\", \"proto\":\"IOT/1.1\", \"header\":{}, \"method\":\"POST\", \"path\":\"/b\", \"home\":\"b.com\", \"body\":2}\n"},
 			{status:200, nonce:"3", body:map[string]interface{}{"a":"a1"}, sand:"{\"nonce\":\"3\", \"proto\":\"IOT/1.1\", \"header\":{}, \"method\":\"POST\", \"path\":\"/c\", \"home\":\"c.com\", \"body\":{\"a\":\"a1\"}}\n"},
@@ -122,7 +122,7 @@ func Test_server_Serve(t *testing.T){
 			if slen := len(test.sand); slen != n {
 				t.Fatalf("预测长度 %v, 实际发送长度 %v", slen, n)
 			}
-			p := make([]byte,10240)
+			p := make([]byte,1024)
 			n, err = c.Read(p)
 			if err != nil {
 				t.Fatal(err)
@@ -131,16 +131,15 @@ func Test_server_Serve(t *testing.T){
 			//关闭连接
 			c.Close()
 			
-//			fmt.Printf("%s\n", p[:n])
-			var ir ResponseIOT
+			var ir ResponseConfig
 			if err = json.NewDecoder(bytes.NewReader(p[:n])).Decode(&ir); err != nil {
-				t.Fatalf("%d, 错误 %v", index, err)
+				t.Fatalf("%d, 错误 %v, 数据 %s\n", index, err, p[:n])
 			}
 			if ir.Status != test.status {
-				t.Fatalf("%d, 预测 %v，错误 %v", index, test.status, ir.Status)
+				t.Fatalf("%d, 预测 %v，错误 %v\n", index, test.status, ir.Status)
 			}
 			if ir.Nonce != test.nonce {
-				t.Fatalf("%d, 预测 %v，错误 %v", index, test.nonce, ir.Nonce)
+				t.Fatalf("%d, 预测 %v，错误 %v\n", index, test.nonce, ir.Nonce)
 			}
 			if test.body != nil {
 				if !reflect.DeepEqual(ir.Body, test.body) {
