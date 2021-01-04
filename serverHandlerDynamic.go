@@ -2,9 +2,10 @@ package viot
 import (
     "path/filepath"
     "io/ioutil"
+    "net/url"
     "bytes"
+    "strings"
     "fmt"
-    "bufio"
     "time"
     "os"
     "errors"
@@ -17,11 +18,11 @@ import (
 
 
 type DynamicTemplater interface{
-    SetPath(rootPath, pagePath string)																				// 设置路径
-    Parse(r *bufio.Reader) (err error)																				// 解析
-    Execute(out *bytes.Buffer, dot interface{}) error																// 执行
+    SetPath(rootPath, pagePath string)																			// 设置路径
+    Parse(r io.Reader) (err error)																				// 解析
+    Execute(out io.Writer, dot interface{}) error																// 执行
 }
-type DynamicTemplateFunc func() DynamicTemplater
+type DynamicTemplateFunc func(*ServerHandlerDynamic) DynamicTemplater
 
 //ServerHandlerDynamic 处理动态页面文件
 type ServerHandlerDynamic struct {
@@ -33,7 +34,9 @@ type ServerHandlerDynamic struct {
     Home        		*Home																// 网站配置
 	Context				context.Context														// 上下文
 	Plus				map[string]DynamicTemplateFunc										// 支持更动态文件类型
-	HandlerError		func(w ResponseWriter, r *Request, err error)						// 接管ServeIOT处理错误
+	ReadFile			func(u *url.URL, filePath string) (io.Reader, time.Time, error)		// 读取文件。仅在 .ServeHTTP 方法中使用
+	ReplaceParse		func(name string, p []byte) []byte									// 替换解析
+    HandlerError        func(w ResponseWriter, r *Request, err error)           			// 接管ServeIOT处理错误
    	exec				DynamicTemplater
    	modeTime			time.Time
 }
@@ -48,46 +51,54 @@ func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
 	}
 	var filePath = filepath.Join(T.RootPath, T.PagePath)
 
-	osFile, err := os.Open(filePath)
-	if err != nil {
-		//打开文件错误
-		err = fmt.Errorf("Failed to read the file! Error: %s", err.Error())
-		if T.HandlerError != nil {
-			T.HandlerError(rw, req, err)
-			return
+	var (
+		tmplread io.Reader
+		modeTime time.Time
+		err error
+	 )
+	if T.ReadFile != nil {
+		tmplread, modeTime, err = T.ReadFile(req.URL, filePath)
+		if err != nil {
+			if T.HandlerError != nil {
+				T.HandlerError(rw, req, err)
+				return
+			}
+		    Error(rw, err.Error(), 500)
+		    return
 		}
-	    Error(rw, err.Error(), 500)
-	    return
-	}
-	defer osFile.Close()
-
-	//记录文件修改时间，用于缓存文件
-	osFileInfo, err := osFile.Stat()
-	if err != nil {
-		T.exec = nil
-	}else{
-		modeTime := osFileInfo.ModTime()
 		if !modeTime.Equal(T.modeTime) {
 			T.exec = nil
 		}
 		T.modeTime = modeTime
-	}
-	
-	if T.exec == nil {
-	    var content, err = ioutil.ReadAll(osFile)
-	    if err != nil {
-			//打开文件错误
+	}else{
+		osFile, err := os.Open(filePath)
+		if err != nil {
 			err = fmt.Errorf("Failed to read the file! Error: %s", err.Error())
 			if T.HandlerError != nil {
 				T.HandlerError(rw, req, err)
 				return
 			}
 		    Error(rw, err.Error(), 500)
-	        return
-	    }
+		    return
+		}
+		defer osFile.Close()
+		tmplread = osFile
 
+		//记录文件修改时间，用于缓存文件
+		osFileInfo, err := osFile.Stat()
+		if err != nil {
+			T.exec = nil
+		}else{
+			modeTime = osFileInfo.ModTime()
+			if !modeTime.Equal(T.modeTime) {
+				T.exec = nil
+			}
+			T.modeTime = modeTime
+		}
+	}
+	if T.exec == nil {
 	    //解析模板内容
-		err = T.Parse(bytes.NewBuffer(content))
+		err = T.Parse(tmplread)
 	    if err != nil {
 			if T.HandlerError != nil {
 				T.HandlerError(rw, req, err)
@@ -123,15 +134,16 @@ func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
 				Error(rw, err.Error(), 500)
 				return
 			}
-			//原样写入
+			
 			io.WriteString(rw.(io.Writer), err.Error())
 			log.Println(err.Error())
 			return
 		}
+		
 		if !dock.Writed {
-			//字符 设置到 主体
-			rw.SetBody(body.String())
-			body.Reset()
+			if body.Len() != 0 {
+				rw.SetBody(body.String())
+			}
 		}
 	}()
 
@@ -142,9 +154,9 @@ func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
 //ParseText 解析模板
 //	content, name string	模板内容，模板名称
 //	error					错误
-func (T *ServerHandlerDynamic) ParseText(content, name string) error {
+func (T *ServerHandlerDynamic) ParseText(name, content string) error {
 	T.PagePath = name
-	r := bytes.NewBufferString(content)
+	r := strings.NewReader(content)
 	return T.Parse(r)
 }
 
@@ -152,7 +164,6 @@ func (T *ServerHandlerDynamic) ParseText(content, name string) error {
 //	path string			模板文件路径，如果为空，默认使用RootPath,PagePath字段
 //	error				错误
 func (T *ServerHandlerDynamic) ParseFile(path string) error {
-
 	if path == "" {
 		path = filepath.Join(T.RootPath, T.PagePath)
 	}else if !filepath.IsAbs(path) {
@@ -168,18 +179,33 @@ func (T *ServerHandlerDynamic) ParseFile(path string) error {
 	if err != nil {
 		return err
 	}
+
 	r := bytes.NewBuffer(b)
 	return T.Parse(r)
 }
 
 //Parse 解析模板
-//	bufr *bytes.Reader	模板内容
+//	r io.Reader			模板内容
 //	error				错误
-func (T *ServerHandlerDynamic) Parse(bufr *bytes.Buffer) (err error) {
+func (T *ServerHandlerDynamic) Parse(r io.Reader) (err error) {
 	if T.PagePath == "" {
     	return verror.TrackError("viot: ServerHandlerDynamic.PagePath is not a valid path")
 	}
-
+	
+	
+	bufr, ok := r.(*bytes.Buffer)
+	if T.ReplaceParse != nil {
+		allb, err := ioutil.ReadAll(r)
+		if err != nil {
+			return  verror.TrackErrorf("vweb: ServerHandlerDynamic.ReplaceParse failed to read data: %s", err.Error())
+		}
+		allb = T.ReplaceParse(T.PagePath, allb)
+		bufr = bytes.NewBuffer(allb)
+	}else if !ok {
+		bufr = bytes.NewBuffer(nil)
+		bufr.ReadFrom(r)
+	}
+	
     //文件首行
     firstLine, err := bufr.ReadBytes('\n')
     if err != nil || len(firstLine) == 0 {
@@ -197,9 +223,9 @@ func (T *ServerHandlerDynamic) Parse(bufr *bytes.Buffer) (err error) {
 	dynmicType := string(firstLine)
     switch dynmicType {
     case "//template":
-        var shdt = &serverHandlerDynamicTemplate{}
+        var shdt = &serverHandlerDynamicTemplate{P:T}
 		shdt.SetPath(T.RootPath, T.PagePath)
-        err = shdt.Parse(bufio.NewReader(bufr))
+        err = shdt.Parse(bufr)
         if err != nil {
         	return
         }
@@ -209,9 +235,9 @@ func (T *ServerHandlerDynamic) Parse(bufr *bytes.Buffer) (err error) {
     		return errors.New("viot: The file type of the first line of the file is not recognized")
     	}
 		if plus, ok := T.Plus[dynmicType[2:]]; ok {
-			shdt := plus()
+			shdt := plus(T)
 			shdt.SetPath(T.RootPath, T.PagePath)
-			err = shdt.Parse(bufio.NewReader(bufr))
+			err = shdt.Parse(bufr)
 	        if err != nil {
 	        	return
 	        }
@@ -225,7 +251,7 @@ func (T *ServerHandlerDynamic) Parse(bufr *bytes.Buffer) (err error) {
 //	bufw *bytes.Buffer	模板返回数据
 //	dock interface{}	与模板对接接口
 //	error				错误
-func (T *ServerHandlerDynamic) Execute(bufw *bytes.Buffer, dock interface{}) (err error) {
+func (T *ServerHandlerDynamic) Execute(bufw io.Writer, dock interface{}) (err error) {
 	if T.exec == nil {
 		return errors.New("viot: Parse the template content first and then call the Execute")
 	}

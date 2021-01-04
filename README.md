@@ -227,7 +227,7 @@ type DynamicTemplater interface {                                           // �
     Parse(r *bufio.Reader) (err error)                                          // 解析
     Execute(out *bytes.Buffer, dot interface{}) error                           // 执行
 }
-type DynamicTemplateFunc func() DynamicTemplater                            // 动态模板方法
+type DynamicTemplateFunc func(*ServerHandlerDynamic) DynamicTemplater           // 动态模板方法
 type ServerHandlerDynamic struct {                                          // 动态
     //必须的
     RootPath string                                                             // 根目录
@@ -237,6 +237,8 @@ type ServerHandlerDynamic struct {                                          // �
     Home     *Home                                                              // 家配置
     Context  context.Context                                                    // 上下文
     Plus     map[string]DynamicTemplateFunc                                     // 支持更动态文件类型
+    ReadFile            func(u *url.URL, filePath string) (io.Reader, time.Time, error)     // 读取文件。仅在 .ServeHTTP 方法中使用
+    ReplaceParse        func(name string, p []byte) []byte                                  // 替换解析
     HandlerError        func(w ResponseWriter, r *Request, err error)           // 接管ServeIOT处理错误
 }
     func (T *ServerHandlerDynamic) Execute(bufw *bytes.Buffer, dock interface{}) (err error)    // 执行模板
