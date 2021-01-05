@@ -327,7 +327,7 @@ func (T *ServerHandlerDynamicTemplateExtend) NewFunc(name string) (f func([]refl
 		return nil, errTemplateNotParse
 	}
 	if T.Template.Lookup(name) == nil {
-		return nil, fmt.Errorf("vweb: Template content not found {{define \"%s\"}} ... {{end}} , Calling this method does not support", name)
+		return nil, fmt.Errorf("viot: Template content not found {{define \"%s\"}} ... {{end}} , Calling this method does not support", name)
 	}
 	return func(in []reflect.Value) []reflect.Value {
 		p := &part{input: in,}
@@ -377,7 +377,7 @@ func (T *ServerHandlerDynamicTemplateExtend) ExecuteTemplate(out io.Writer, name
 		return errTemplateNotParse
 	}
  	if T.Template.Lookup(name) == nil {
-		return fmt.Errorf("vweb: Template content not found {{define \"%s\"}} ... {{end}} , Calling this method does not support", name)
+		return fmt.Errorf("viot: Template content not found {{define \"%s\"}} ... {{end}} , Calling this method does not support", name)
 	}
    //执行模板
     if tdot, ok := in.(DotContexter); ok {

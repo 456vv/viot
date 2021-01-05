@@ -180,7 +180,7 @@ func (T *ServerHandlerDynamic) Parse(r io.Reader) (err error) {
 	if T.ReplaceParse != nil {
 		allb, err := ioutil.ReadAll(r)
 		if err != nil {
-			return  verror.TrackErrorf("vweb: ServerHandlerDynamic.ReplaceParse failed to read data: %s", err.Error())
+			return  verror.TrackErrorf("viot: ServerHandlerDynamic.ReplaceParse failed to read data: %s", err.Error())
 		}
 		allb = T.ReplaceParse(T.PagePath, allb)
 		bufr = bytes.NewBuffer(allb)

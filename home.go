@@ -4,7 +4,6 @@ import (
 	"time"
     "github.com/456vv/verror"
     "github.com/456vv/vmap/v2"
-    "github.com/456vv/vweb/v2"
     "sync"
 )
 
@@ -38,7 +37,7 @@ func (T *HomePool) NewHome(name string) *Home {
 	}
 	home := &Home{
 		identity:	name,
-		Sessions:	&vweb.Sessions{
+		Sessions:	&Sessions{
 			Expired: time.Hour,
 		},
 		Global: 	vmap.NewMap(),
@@ -105,8 +104,8 @@ func (T *HomePool) Close() error {
 
 //Home 家数据存储
 type Home struct {
-    Sessions	*vweb.Sessions                                                      // 会话集
-    Global		vweb.Globaler                                                       // Global
+    Sessions	*Sessions                                                      // 会话集
+    Global		Globaler                                                       // Global
     RootDir		func(path string) string											// 网站的根目录
     Extend		interface{}															// 接口类型，可以自己存在任何类型
 	identity	string

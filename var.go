@@ -44,3 +44,8 @@ var methods	= []string{"GET","POST","HEAD","PUT","DELETE","OPTIONS"}
 
 //内部模板函数
 var TemplateFunc = vweb.TemplateFunc
+
+type Session = vweb.Session
+type Sessions = vweb.Sessions
+type Globaler = vweb.Globaler
+type Sessioner = vweb.Sessioner
