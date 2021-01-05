@@ -14,8 +14,8 @@ var (
     ServerContextKey = &contextKey{"iot-server"}                        // 服务器
     LocalAddrContextKey = &contextKey{"local-addr"}                     // 监听地址
 )
-var TemplateFunc = template.FuncMap{...}                                // 模板函数映射
-func ExtendTemplatePackage(pkgName string, deputy template.FuncMap)     // 扩展函数
+var TemplateFunc = vweb.TemplateFunc                                    // 模板函数映射
+var ExtendTemplatePackage = vweb.ExtendTemplatePackage                  // 扩展函数
 type Handler interface {                                        // 处理函数接口
     ServeIOT(ResponseWriter, *Request)                                  // 处理
 }
@@ -132,36 +132,9 @@ type Route struct{                                                          // �
 }
     func (T *Route) HandleFunc(url string,  handler func(w ResponseWriter, r *Request))    // 增加函数
     func (T *Route) ServeIOT(w ResponseWriter, r *Request)                    // 调用函数
-type Session struct {                                                       // 会话
-    vmap.Map                                                                    // 数据，用户存储的数据
-}
-    func (T *Session) Defer(call interface{}, args ...interface{}) error        // 退出调用
-    func (T *Session) Free()                                                    // 释放调用
-    func (T *Session) Token() string                                            // 编号
-type Sessioner interface {                                                  // 会话接口
-    Token() string                                                              // 编号
-    Set(key, val interface{})                                                   // 设置
-    Has(key interface{}) bool                                                   // 判断
-    Get(key interface{}) interface{}                                            // 读取
-    GetHas(key interface{}) (val interface{}, ok bool)                          // 读取判断
-    Del(key interface{})                                                        // 删除
-    SetExpired(key interface{}, d time.Duration)                                // 过期
-    SetExpiredCall(key interface{}, d time.Duration, f func(interface{}))       // 过期调用
-    Reset()                                                                     // 重置
-    Defer(call interface{}, args ...interface{}) error                          // 退出调用
-    Free()                                                                      // 释放调用
-}
-type Sessions struct {                                                      // 会话集
-    Expired      time.Duration                                                  // 保存会话时间
-}
-    func (T *Sessions) DelSession(token string)                                 // 使用token删除的会话
-    func (T *Sessions) GetSession(token string) (Sessioner, bool)               // 使用token读取会话
-    func (T *Sessions) SetSession(token string, s Sessioner) Sessioner          // 使用token写入新的会话
-    func (T *Sessions) Len() int                                                // 数量
-    func (T *Sessions) ProcessDeadAll() []interface{}                           // 过期处理
 type Home struct {                                                          // 家
-    Sessions *Sessions                                                          // 会话集
-    Global   Globaler                                                           // Global
+    Sessions *vweb.Sessions                                                     // 会话集
+    Global   vweb.Globaler                                                      // Global
     RootDir  func(path string) string                                           // 家的根目录
     Extend   interface{}                                                        // 接口类型，可以自
 }
@@ -186,14 +159,14 @@ type TemplateDot struct {                                                   // �
 }
     func (T *TemplateDot) Defer(call interface{}, args ...interface{}) error    // 退同调用
     func (T *TemplateDot) Free()                                                // 释放Defer
-    func (T *TemplateDot) Global() Globaler                                     // 全站缓存
+    func (T *TemplateDot) Global() vweb.Globaler                                // 全站缓存
     func (T *TemplateDot) Header() Header                                  // 标头
     func (T *TemplateDot) Request() *Request                               // 请求的信息
     func (T *TemplateDot) ResponseWriter() ResponseWriter                  // 数据写入响应
     func (T *TemplateDot) Launch() RoundTripper                                 // 发射
     func (T *TemplateDot) Hijack() (net.Conn, *bufio.ReadWriter, error)         // 劫持
     func (T *TemplateDot) RootDir(upath string) string                          // 家的根目录
-    func (T *TemplateDot) Session() Sessioner                                   // 用户的会话
+    func (T *TemplateDot) Session() vweb.Sessioner                                   // 用户的会话
     func (T *TemplateDot) Swap() *vmap.Map                                      // 信息交换
     func (T *TemplateDot) Context() context.Context                             // 上下文
     func (T *TemplateDot) WithContext(ctx context.Context)                      // 替换上下文
@@ -204,8 +177,8 @@ type TemplateDoter interface {                                              // �
     ResponseWriter() ResponseWriter                                             // 数据写入响应
     Launch() RoundTripper                                                       // 发射
     Hijack() (net.Conn, *bufio.ReadWriter, error)                               // 劫持
-    Session(token string) Sessioner                                             // 用户的会话缓存
-    Global() Globaler                                                           // 全站缓存
+    Session(token string) vweb.Sessioner                                        // 用户的会话缓存
+    Global() vweb.Globaler                                                      // 全站缓存
     Swap() *vmap.Map                                                            // 信息交换
     Defer(call interface{}, args ... interface{}) error                         // 退回调用
     DotContexter                                                                // 点上下文
@@ -215,11 +188,9 @@ type DotContexter interface {                                               // �
     WithContext(ctx context.Context)                                            // 替换上下文
 }
 type DynamicTemplater interface {                                           // 动态模板
-    ParseFile(path string) error                                                // 解析文件
-    ParseText(content, name string) error                                       // 解析文本
     SetPath(rootPath, pagePath string)                                          // 设置路径
-    Parse(r *bufio.Reader) (err error)                                          // 解析
-    Execute(out *bytes.Buffer, dot interface{}) error                           // 执行
+    Parse(r io.Reader) (err error)                                              // 解析
+    Execute(out io.Writer, dot interface{}) error                               // 执行
 }
 type DynamicTemplateFunc func(*ServerHandlerDynamic) DynamicTemplater           // 动态模板方法
 type ServerHandlerDynamic struct {                                          // 动态
@@ -233,24 +204,23 @@ type ServerHandlerDynamic struct {                                          // �
     Plus     map[string]DynamicTemplateFunc                                     // 支持更动态文件类型
     ReadFile            func(u *url.URL, filePath string) (io.Reader, time.Time, error)     // 读取文件。仅在 .ServeHTTP 方法中使用
     ReplaceParse        func(name string, p []byte) []byte                                  // 替换解析
-    HandlerError        func(w ResponseWriter, r *Request, err error)           // 接管ServeIOT处理错误
 }
-    func (T *ServerHandlerDynamic) Execute(bufw *bytes.Buffer, dock interface{}) (err error)    // 执行模板
-    func (T *ServerHandlerDynamic) Parse(bufr *bytes.Buffer) (err error)                        // 解析模板
+    func (T *ServerHandlerDynamic) Execute(bufw io.Writer, dock interface{}) (err error)        // 执行模板
+    func (T *ServerHandlerDynamic) Parse(bufr io.Reader) (err error)                            // 解析模板
     func (T *ServerHandlerDynamic) ParseFile(path string) error                                 // 解析模板文件
     func (T *ServerHandlerDynamic) ParseText(content, name string) error                        // 解析模板文本
     func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request)                    // 服务IOT
 type Client struct{
-	Dialer				vconnpool.Dialer										// 拨号
-	Home				string													// Home
-	Addr				string													// 服务器地址
-	WriteDeadline		time.Duration											// 写入连接超时
-	ReadDeadline		time.Duration											// 读取连接超时
+    Dialer              vconnpool.Dialer                                        // 拨号
+    Home                string                                                  // Home
+    Addr                string                                                  // 服务器地址
+    WriteDeadline       time.Duration                                           // 写入连接超时
+    ReadDeadline        time.Duration                                           // 读取连接超时
 }
-	func (T *Client) Get(url string, header Header) (resp *Response, err error)								// 快速读取
-	func (T *Client) GetCtx(ctx context.Context, urlstr string, header Header) (resp *Response, err error)	// 快速读取（上下文）
-	func (T *Client) Do(req *Request) (resp *Response, err error)											// 自定义请求
-	func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err error)					// 自定义请求（上下文）
-	func (T *Client) Post(url string, header Header, body interface{}) (resp *Response, err error)			// 快速提交
-	func (T *Client) PostCtx(ctx context.Context, urlstr string, header Header, body interface{})			// 快速提交（上下文）
+    func (T *Client) Get(url string, header Header) (resp *Response, err error)                             // 快速读取
+    func (T *Client) GetCtx(ctx context.Context, urlstr string, header Header) (resp *Response, err error)  // 快速读取（上下文）
+    func (T *Client) Do(req *Request) (resp *Response, err error)                                           // 自定义请求
+    func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err error)                    // 自定义请求（上下文）
+    func (T *Client) Post(url string, header Header, body interface{}) (resp *Response, err error)          // 快速提交
+    func (T *Client) PostCtx(ctx context.Context, urlstr string, header Header, body interface{})           // 快速提交（上下文）
 

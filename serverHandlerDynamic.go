@@ -36,7 +36,6 @@ type ServerHandlerDynamic struct {
 	Plus				map[string]DynamicTemplateFunc										// 支持更动态文件类型
 	ReadFile			func(u *url.URL, filePath string) (io.Reader, time.Time, error)		// 读取文件。仅在 .ServeHTTP 方法中使用
 	ReplaceParse		func(name string, p []byte) []byte									// 替换解析
-    HandlerError        func(w ResponseWriter, r *Request, err error)           			// 接管ServeIOT处理错误
    	exec				DynamicTemplater
    	modeTime			time.Time
 }
@@ -59,10 +58,6 @@ func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
 	if T.ReadFile != nil {
 		tmplread, modeTime, err = T.ReadFile(req.URL, filePath)
 		if err != nil {
-			if T.HandlerError != nil {
-				T.HandlerError(rw, req, err)
-				return
-			}
 		    Error(rw, err.Error(), 500)
 		    return
 		}
@@ -74,10 +69,6 @@ func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
 		osFile, err := os.Open(filePath)
 		if err != nil {
 			err = fmt.Errorf("Failed to read the file! Error: %s", err.Error())
-			if T.HandlerError != nil {
-				T.HandlerError(rw, req, err)
-				return
-			}
 		    Error(rw, err.Error(), 500)
 		    return
 		}
@@ -100,10 +91,6 @@ func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
 	    //解析模板内容
 		err = T.Parse(tmplread)
 	    if err != nil {
-			if T.HandlerError != nil {
-				T.HandlerError(rw, req, err)
-				return
-			}
 			Error(rw, err.Error(), 500)
 	        return
 	    }
@@ -127,10 +114,6 @@ func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
 		if err != nil {
 			if !dock.Writed {
 				//页面代码错误
-				if T.HandlerError != nil {
-					T.HandlerError(rw, req, err)
-					return
-				}
 				Error(rw, err.Error(), 500)
 				return
 			}

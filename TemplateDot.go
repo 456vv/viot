@@ -2,6 +2,7 @@ package viot
 import(
 	"net"
     "github.com/456vv/vmap/v2"
+    "github.com/456vv/vweb/v2"
     "context"
     "bufio"
 )
@@ -18,8 +19,8 @@ type TemplateDoter interface{
     ResponseWriter() ResponseWriter                                                    		// 数据写入响应
     Launch() RoundTripper																	// 发射
     Hijack() (net.Conn, *bufio.ReadWriter, error)											// 劫持
-    Session(token string) Sessioner                                                         // 用户的会话缓存
-    Global() Globaler                                                                       // 全站缓存
+    Session(token string) vweb.Sessioner                                                    // 用户的会话缓存
+    Global() vweb.Globaler                                                                  // 全站缓存
     Swap() *vmap.Map                                                                        // 信息交换
     Defer(call interface{}, args ... interface{}) error										// 退回调用
     DotContexter																			// 上下文
@@ -33,7 +34,7 @@ type TemplateDot struct {
     Home       		 	*Home                                                                       // 家配置
     Writed      		bool                                                                        // 表示已经调用写入到客户端。这个是只读的
     exchange       		vmap.Map                                                                    // 缓存映射
-    ec					exitCall																	// 退回调用函数
+    ec					vweb.ExitCall																// 退回调用函数
     ctx					context.Context																// 上下文
 }
 
@@ -83,20 +84,20 @@ func (T *TemplateDot) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 //Session 用户的会话缓存
 //	token string	令牌
 //	Sessioner  		会话缓存
-func (T *TemplateDot) Session(token string) Sessioner {	
+func (T *TemplateDot) Session(token string) vweb.Sessioner {	
 	if T.Home == nil || T.Home.Sessions == nil {
 		return nil
 	}
 	session, ok := T.Home.Sessions.GetSession(token)
 	if !ok {
-		return T.Home.Sessions.SetSession(token, &Session{})
+		return T.Home.Sessions.SetSession(token, &vweb.Session{})
 	}
 	return session
 }
 
 //Global 全站缓存
 //	Globaler	公共缓存
-func (T *TemplateDot) Global() Globaler {
+func (T *TemplateDot) Global() vweb.Globaler {
 	if T.Home == nil || T.Home.Global == nil {
 		return nil
 	}

@@ -17,20 +17,8 @@ import(
     "math"
     "math/big"	
 	"golang.org/x/net/http/httpguts"
-	"text/template"
 )
 
-//ExtendTemplatePackage 扩展模板的包
-//	pkgName string					包名
-//	deputy template.FuncMap 		函数集
-func ExtendTemplatePackage(pkgName string, deputy template.FuncMap) {
-	if _, ok := dotPackage[pkgName]; !ok {
-		dotPackage[pkgName] = make(template.FuncMap)
-	}
-	for name, fn  := range deputy {
-		dotPackage[pkgName][name]=fn
-	}
-}
 //在切片中查找
 func strSliceContains(ss []string, t string) bool {
 	for _, v := range ss {

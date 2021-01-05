@@ -3,6 +3,7 @@ package viot
 import (
 	"testing"
     "time"
+    "github.com/456vv/vweb/v2"
 )
 
 
@@ -63,7 +64,7 @@ func Test_Home_Start(t *testing.T) {
     home.Sessions.Expired = time.Second
     
     //生成会话
-    home.Sessions.SetSession("a", &Session{})
+    home.Sessions.SetSession("a", &vweb.Session{})
 	
     if home.Sessions.Len() != 1 {
         t.Fatal("无法增加会话")
@@ -85,7 +86,7 @@ func Test_Home_SetRecoverSession(t *testing.T) {
     
     //生成会话
     ok := false
-    home.Sessions.SetSession("a", &Session{}).Defer(func(){
+    home.Sessions.SetSession("a", &vweb.Session{}).Defer(func(){
     	ok=true
     })
 	

@@ -3,6 +3,7 @@ package viot
 import(
 	"errors"
 	"time"
+	"github.com/456vv/vweb/v2"
 )
 
 
@@ -41,6 +42,8 @@ var aLongTimeAgo = time.Unix(1, 0)
 //方法集
 var methods	= []string{"GET","POST","HEAD","PUT","DELETE","OPTIONS"}
 
+//内部模板函数
+var TemplateFunc = vweb.TemplateFunc
 
-
-
+//扩展模板的包
+var ExtendTemplatePackage = vweb.ExtendTemplatePackage
