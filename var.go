@@ -44,6 +44,3 @@ var methods	= []string{"GET","POST","HEAD","PUT","DELETE","OPTIONS"}
 
 //内部模板函数
 var TemplateFunc = vweb.TemplateFunc
-
-//扩展模板的包
-var ExtendTemplatePackage = vweb.ExtendTemplatePackage
