@@ -373,7 +373,7 @@ func (T *conn) serve(ctx context.Context) {
 		req, err := T.readRequest(T.ctx, br)
 
 		if err != nil {
-			fmt.Fprintf(T.rwc, `{"body":%q,"header":{"Connection": "close"},"nonce":"-1","status":400}\n`,"Bad Request: "+err.Error())
+			fmt.Fprintf(T.rwc, `{"body":%q,"header":{"Connection":"close"},"nonce":"-1","status":400}\n`,"Bad Request: "+err.Error())
 			T.closeWriteAndWait()
 			return
 		}
