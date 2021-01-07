@@ -104,8 +104,8 @@ func (T *HomePool) Close() error {
 
 //Home 家数据存储
 type Home struct {
-    Sessions	*Sessions                                                           // 会话集
-    Global		Globaler                                                            // Global
+    Sessions	*Sessions                                                      // 会话集
+    Global		Globaler                                                       // Global
     RootDir		func(path string) string											// 网站的根目录
     Extend		interface{}															// 接口类型，可以自己存在任何类型
 	identity	string

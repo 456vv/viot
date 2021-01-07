@@ -55,8 +55,8 @@ func (T *Route) ServeIOT(w ResponseWriter, r *Request){
 		if ok {
 			handleFunc.ServeIOT(w, r)
 			if path == r.URL.Path {
-			return
-		}
+				return
+			}
 		}
 	}
 	
