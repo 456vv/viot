@@ -4,7 +4,6 @@ import(
 	"github.com/456vv/vconnpool/v2"
 	"time"
 	"context"
-	"bufio"
 	"net/url"
 	"net"
 )
@@ -135,7 +134,8 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 			return nil, err
 		}
 	}
-	return ReadResponse(bufio.NewReader(netConn), req)
+	
+	return ReadResponse(netConn, req)
 }
 
 //快速提交

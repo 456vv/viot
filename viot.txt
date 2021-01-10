@@ -51,7 +51,7 @@ type Header map[string]string                                   // 标头
     func (h Header) Clone() Header                                      // 克隆
 func ParseIOTVersion(vers string) (major, minor int, ok bool)           // 解析IOT请求版本
 func ReadRequest(b io.Reader) (req *Request, err error)                 // 读取请求数据
-func ReadResponse(r *bufio.Reader, req *Request) (res *Response, err error) // 读取响应数据
+func ReadResponse(r io.Reader, req *Request) (res *Response, err error) // 读取响应数据
 func Nonce() (nonce string, err error)                                  // 生成编号
 func Error(w ResponseWriter, err string, code int)                      // 快速设置错误
 type RequestConfig struct{                                         // iot接收或发送数据格式

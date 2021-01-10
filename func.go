@@ -160,7 +160,7 @@ func readRequest(b io.Reader) (req *Request, err error) {
 //	b io.Reader		需解析的数据，重要提醒：不要包含多个json块，它只能解析一个json块，其它数据块会被丢弃。这会清空你的io.Reader。
 //	res *Response	响应
 //	err error		错误
-func ReadResponse(r *bufio.Reader, req *Request) (res *Response, err error){
+func ReadResponse(r io.Reader, req *Request) (res *Response, err error){
 	res, err = readResponse(r)
 	if err != nil {
 		return
@@ -177,9 +177,9 @@ func readResponse(b io.Reader) (res *Response, err error) {
 	//{json}
 	
 	var riot ResponseConfig
-	err = json.NewDecoder( b ).Decode(&riot)
+	err = json.NewDecoder( bufr ).Decode(&riot)
 	if err != nil {
-		return nil, fmt.Errorf("Incorrect response content format %v", err)
+		return nil, fmt.Errorf("read response content error %v", err)
 	}
 	
 	if riot.Nonce == "" {
