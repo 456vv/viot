@@ -3,41 +3,30 @@ package viot
 import(
 	"testing"
 	"net"
-	"time"
 	"encoding/json"
 	"bytes"
 	"reflect"
-//	"fmt"
 )
 
-func Test_server_createDoneChan(t *testing.T){
-	s := &Server{}
-	c := s.createDoneChan()
-	close(c)
-}
-
-func Test_server_getDoneChan(t *testing.T){
-	s := &Server{}
-	select{
-		case <-s.getDoneChan():
-		default: 
-			if s.doneChan == nil {
-				t.Fatal("错误")
-			}
-			c := s.createDoneChan()
-			close(c)
+func C2L(t *testing.T, addr string, server func(t *testing.T, l net.Listener), client func(t *testing.T, c net.Conn)){
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-}
-
-func Test_server_closeDoneChan(t *testing.T){
-	s := &Server{}
-	s.closeDoneChan()
-	select{
-	case <-s.doneChan:
-	default:
-		t.Fatal("错误")
-	}
+	defer l.Close()
+	
+	go func(t *testing.T){
+		laddr := l.Addr().String()
+		netConn, err := net.Dial("tcp", laddr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		client(t, netConn)
+		netConn.Close()
+		l.Close()
+	}(t)
+	
+	server(t, l)
 }
 
 func Test_server_trackListener(t *testing.T){
@@ -79,42 +68,38 @@ func Test_server_trackConn(t *testing.T){
 
 }
 
-func Test_server_closeConns(t *testing.T){
-	
-}
-
 func Test_server_Serve(t *testing.T){
-	l, err := net.Listen("tcp", ":0")
-	if err != nil {
-		t.Fatal(err)
-	}
-//	fmt.Println(l.Addr().String())
-	s := &Server{}
-	go func(t *testing.T){
-		//退出服务器
-		defer s.Close()
-		
-		time.Sleep(time.Second)
+	
+	C2L(t, "127.0.0.1:0", func(t *testing.T, l net.Listener){
+		s := &Server{}
+		s.Handler=HandlerFunc(func(rw ResponseWriter, r *Request){
+			if r.Method == "POST" {
+				var inf interface{}
+				err := r.GetBody(&inf)
+				if err != nil {
+					s.Close()
+					t.Fatalf("Host: %v，错误：%v", r.Host, err)
+				}
+				rw.SetBody(&inf)
+			}
+		})
+		s.Serve(l)
+	}, func(t *testing.T, c net.Conn){
 		tests := []struct{
 			status int
 			sand string
 			nonce string
 			body interface{}
 		}{
-			{status:400, nonce:"-1", sand:"{\"a\":\"a1\", \"nonce\":\"1\", \"proto\":\"IOT/1.1\"}\n"},
 			{status:200, nonce:"1", body:"1", sand:"{\"nonce\":\"1\", \"proto\":\"IOT/1.1\", \"header\":{}, \"method\":\"POST\", \"path\":\"/a\", \"home\":\"a.com\", \"body\":\"1\"}\n"},
 			{status:200, nonce:"2", body:float64(2), sand:"{\"nonce\":\"2\", \"proto\":\"IOT/1.1\", \"header\":{}, \"method\":\"POST\", \"path\":\"/b\", \"home\":\"b.com\", \"body\":2}\n"},
 			{status:200, nonce:"3", body:map[string]interface{}{"a":"a1"}, sand:"{\"nonce\":\"3\", \"proto\":\"IOT/1.1\", \"header\":{}, \"method\":\"POST\", \"path\":\"/c\", \"home\":\"c.com\", \"body\":{\"a\":\"a1\"}}\n"},
 			{status:200, nonce:"4", sand:"{\"nonce\":\"4\", \"proto\":\"IOT/1.1\", \"header\":{}, \"method\":\"POST\", \"path\":\"/d\", \"home\":\"d.com\", \"body\":[1]}\n"},
 			{status:200, nonce:"5", sand:"{\"nonce\":\"5\", \"proto\":\"IOT/1.1\", \"header\":{}, \"method\":\"GET\", \"path\":\"/e\", \"home\":\"e.com\"}\n"},
 			{status:200, nonce:"6", sand:"{\"nonce\":\"6\", \"proto\":\"IOT/1.1\", \"header\":{}, \"method\":\"GET\", \"path\":\"/f\", \"home\":\"f.com\"}\n"},
+			{status:400, nonce:"-1", sand:"{\"a\":\"a1\", \"nonce\":\"1\", \"proto\":\"IOT/1.1\",\"path\":\"\",\"method\":\"GET\",\"host\":\"\"}\n"},
 		}
 		for index, test := range tests {
-			c, err := net.Dial("tcp", l.Addr().String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			
 			n, err := c.Write([]byte(test.sand))
 			if err != nil {
 				t.Fatal(err)
@@ -127,9 +112,6 @@ func Test_server_Serve(t *testing.T){
 			if err != nil {
 				t.Fatal(err)
 			}
-			
-			//关闭连接
-			c.Close()
 			
 			var ir ResponseConfig
 			if err = json.NewDecoder(bytes.NewReader(p[:n])).Decode(&ir); err != nil {
@@ -147,19 +129,8 @@ func Test_server_Serve(t *testing.T){
 				}
 			}
 		}
-	}(t)
-	s.Handler=HandlerFunc(func(rw ResponseWriter, r *Request){
-		if r.Method == "POST" {
-			var inf interface{}
-			err := r.GetBody(&inf)
-			if err != nil {
-				s.Close()
-				t.Fatalf("Home: %v，错误：%v", r.Home, err)
-			}
-			rw.SetBody(&inf)
-		}
+		c.Close()
 	})
-	s.Serve(l)
 }
 
 func Test_server_x(t *testing.T){

@@ -31,7 +31,7 @@ type ServerHandlerDynamic struct {
     PagePath  			string																// 主模板文件路径
 
     //可选的
-    Home        		*Home																// 网站配置
+    Site        		*Site																// 网站配置
 	Context				context.Context														// 上下文
 	Plus				map[string]DynamicTemplateFunc										// 支持更动态文件类型
 	ReadFile			func(u *url.URL, filePath string) (io.Reader, time.Time, error)		// 读取文件。仅在 .ServeHTTP 方法中使用
@@ -100,7 +100,7 @@ func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
     var dock = &TemplateDot{
         R    	 	: req,
         W    		: rw,
-        Home        : T.Home,
+        Site        : T.Site,
     }
 
     ctx := T.Context
@@ -135,7 +135,7 @@ func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
 }
 
 //ParseText 解析模板
-//	content, name string	模板内容，模板名称
+//	name, content string	模板名称, 模板内容
 //	error					错误
 func (T *ServerHandlerDynamic) ParseText(name, content string) error {
 	T.PagePath = name
@@ -158,13 +158,7 @@ func (T *ServerHandlerDynamic) ParseFile(path string) error {
 	}
 
 	defer file.Close()
-	b, err := ioutil.ReadAll(file)
-	if err != nil {
-		return err
-	}
-
-	r := bytes.NewBuffer(b)
-	return T.Parse(r)
+	return T.Parse(file)
 }
 
 //Parse 解析模板

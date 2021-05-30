@@ -1,7 +1,7 @@
 package viot
 
 import(
-	"github.com/456vv/verror"
+	"errors"
 	"log"
 	"net"
 	"sync"
@@ -10,6 +10,7 @@ import(
 	"crypto/tls"
 	"context"
 	"io"
+	"fmt"
 )
 
 //上下文中使用的key
@@ -43,11 +44,15 @@ func (T serverHandler) ServeIOT(rw ResponseWriter, req *Request) {
   	handler.ServeIOT(rw, req)
  }
 
+type LogLevel int
+const (
+    LogErr LogLevel    = 1 << iota		//1
+    LogDebug							//2
+)
 
-  
 //服务器
 type Server struct { 
-    Addr            string                                              // 如果空，TCP监听的地址是，“:http”
+    Addr            string                                              // 如果空，TCP监听的地址是，“:8000”
     Handler         Handler                                             // 如果nil，处理器调用，http.DefaultServeMux
 	BaseContext 	func(net.Listener) context.Context					// 监听上下文
     ConnContext     func(context.Context, net.Conn) (context.Context, net.Conn, error)   // 连接钩子
@@ -55,6 +60,7 @@ type Server struct {
     HandlerRequest  func(b io.Reader) (req *Request, err error)     	// 处理请求
     HandlerResponse	func(b io.Reader) (res *Response, err error)		// 处理响应
     ErrorLog        *log.Logger                                         // 错误？默认是 os.Stderr
+    ErrorLogLevel	LogLevel											// 日志错误级别
     ReadTimeout     time.Duration                                       // 求读取之前，最长期限超时
     WriteTimeout    time.Duration                                       // 响应写入之前，最大持续时间超时
     IdleTimeout     time.Duration                                       // 空闲时间，等待用户重新请求
@@ -62,13 +68,21 @@ type Server struct {
     MaxLineBytes    int                                                 // 限制读取行数据大小
     disableKeepAlives int32                                             // 禁止长连接
     inShutdown        int32                                             // 判断服务器是否已经下线
+    
 
 
     mu          sync.Mutex                                              // 锁
-    listeners   map[*net.Listener]struct{}                               // 监听集
+    listeners   map[*net.Listener]struct{}                              // 监听集
     activeConn  map[*conn]struct{}                                      // 连接集
     doneChan    chan struct{}                                           // 服务关闭
     onShutdown  []func()                                                // 服务器下线事件
+}
+
+//初始化
+func (T *Server) init() {
+	if T.doneChan == nil {
+		T.doneChan = make(chan struct{})
+	}
 }
 
 //行数据大小
@@ -79,29 +93,13 @@ func (T *Server) maxLineBytes() int {
   	return DefaultLineBytes
 }
 
-//创建通道
-func (T *Server) createDoneChan() chan struct{} {
-	T.mu.Lock()
-	defer T.mu.Unlock()
-	if T.doneChan == nil {
-		T.doneChan = make(chan struct{})
-	}
-	return T.doneChan
-}
-
-//读取通道
-func (T *Server) getDoneChan() <- chan struct{} {
-	return T.createDoneChan()
-}
-
 //关闭通道
 func (T *Server) closeDoneChan() {
-	ch := T.createDoneChan()
 	select {
-	case <-ch:
+	case <-T.doneChan:
 		//如果已经关闭，不需要再关闭，直接跳过
 	default:
-		close(ch)
+		close(T.doneChan)
 	}
 }
 
@@ -117,12 +115,14 @@ func (T *Server) trackListener(ln *net.Listener, add bool) bool {
 		if T.shuttingDown() {
 			return false
 		}
+		T.listeners[ln]=struct{}{}
+	}else{
+		
+		delete(T.listeners, ln)
+		
 		if len(T.listeners) == 0 && len(T.activeConn) == 0 {
   			T.doneChan = nil
   		}
-		T.listeners[ln]=struct{}{}
-	}else{
-		delete(T.listeners, ln)
 	}
 	return true
 }
@@ -138,7 +138,7 @@ func (T *Server) closeListeners() error {
 		}
 		delete(T.listeners, ln)
 	}
-	return verror.TrackError(err)
+	return err
 }
 
 //记录连接
@@ -175,7 +175,7 @@ func (T *Server) ListenAndServe() error {
 	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return verror.TrackError(err)
+		return err
 	}
 	return T.Serve(ln)
 }
@@ -184,8 +184,6 @@ func (T *Server) ListenAndServe() error {
 //	l net.Listener	监听
 //	error			错误
 func (T *Server) Serve(l net.Listener) error {
-	var tempDelay time.Duration
-	
 	origListener := l
 	l = &tcpKeepAliveListener{l.(*net.TCPListener)}
 	defer l.Close()
@@ -196,42 +194,36 @@ func (T *Server) Serve(l net.Listener) error {
 	}
 	defer T.trackListener(&l, false)
 	
+	T.init()
+	
 	baseCtx := context.Background()
 	if T.BaseContext != nil {
 		baseCtx = T.BaseContext(origListener)
 		if baseCtx == nil {
-			return verror.TrackError("viot: BaseContext returned a nil context")
+			return errors.New("viot: BaseContext returned a nil context")
 		}
 	}
 	
 	ctx := context.WithValue(baseCtx, ServerContextKey, T)
+	var tempDelay time.Duration
 	for {
 		rw, e := l.Accept()
 		if e != nil {
 			select {
-			case <-T.getDoneChan():
+			case <-T.doneChan:
 				//服务器关闭后，信道被打通。退出
 				return ErrServerClosed
 			default:
 			}
 			if ne, ok := e.(net.Error); ok && ne.Temporary() {
-				if tempDelay == 0 {
-					tempDelay = 5 * time.Millisecond
-				} else {
-					tempDelay *= 2
-				}
-				if max := 1 * time.Second; tempDelay > max {
-					tempDelay = max
-				}
-				T.logf(verror.TrackErrorf("Accept 错误: %v; 重试 %v", e, tempDelay).Error())
-				time.Sleep(tempDelay)
+				tempDelay = delay(tempDelay, time.Second)
 				continue
 			}
-			return verror.TrackError(e)
+			return e
 		}
 		tempDelay = 0
 		
-		//
+		//新 goroutine 进程
 		go func(ctx context.Context, rw net.Conn){
 			nrw := rw
 			connCtx := ctx
@@ -240,7 +232,7 @@ func (T *Server) Serve(l net.Listener) error {
 				connCtx, nrw, err = T.ConnContext(ctx, rw)
 				if err != nil {
 					defer rw.Close()
-					T.logf(err.Error())
+					T.logf(LogErr, err.Error())
 					return
 				}
 			}
@@ -258,9 +250,8 @@ func (T *Server) Close() error {
 	T.closeDoneChan()
 	
 	//关闭监听和连接
-	err := T.closeListeners()
 	T.closeConns()
-	return err
+	return T.closeListeners()
 }
 
 //空闲超时时间，如果没有设置，则使用读取时间
@@ -289,12 +280,13 @@ func (T *Server) Shutdown(ctx context.Context) error {
   	ticker := time.NewTicker(shutdownPollInterval)
   	defer ticker.Stop()
   	for {
+  		//返回 false 表示还有连接不是空闲状态
   		if T.closeIdleConns() {
   			return lnerr
   		}
   		select {
   		case <- ctx.Done():
-  			return verror.TrackError(ctx.Err())
+  			return ctx.Err()
   		case <-ticker.C:
   		}
   	}
@@ -303,9 +295,7 @@ func (T *Server) Shutdown(ctx context.Context) error {
 //注册更新事件
 //	f func()		服务下线时调用此函数
 func (T *Server) RegisterOnShutdown(f func()) {
-  	T.mu.Lock()
   	T.onShutdown = append(T.onShutdown, f)
-  	T.mu.Unlock()
 }
 
 //设置长连接开启
@@ -323,10 +313,13 @@ func (T *Server) SetKeepAlivesEnabled(v bool) {
 }
 
 //日志
-func (T *Server) logf(format string, args ...interface{}) {
-	if T.ErrorLog != nil {
-		T.ErrorLog.Printf(format, args...)
-	}
+func (T *Server) logf(level LogLevel, format string, v ...interface{}) error {
+    if T.ErrorLog != nil && T.ErrorLogLevel >= level {
+		err := fmt.Errorf(format+"\n", v...)
+		T.ErrorLog.Output(2, err.Error())
+		return err
+    }
+    return nil
 }
 
 //判断服务器是否支持长连接

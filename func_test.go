@@ -91,14 +91,14 @@ func Test_readRequest(t *testing.T){
 		Proto 	string
 		Method 	string
 		Path 	string
-		Home	string
+		Host	string
 		Header 	Header
 		Body	interface{}
 		err		bool
 	}{
-		{Nonce:"1", Proto:"IOT/1.1", Method:"GET", Path:"/a", Home:"a.com", Header:Header{"A":"a"}, Body: "aaaa", err:true},
-		{Nonce:"2", Proto:"IOT/1.1", Method:"POST", Path:"/b", Home:"b.com", Header:Header{"B":"c"}, Body: "bbbb"},
-		{Nonce:"3", Proto:"IOT/2.1", Method:"GET", Path:"/c", Home:"c.com", Header:Header{"C":"c"}, Body: "cccc", err:true},
+		{Nonce:"1", Proto:"IOT/1.1", Method:"GET", Path:"/a", Host:"a.com", Header:Header{"A":"a"}, Body: "aaaa", err:true},
+		{Nonce:"2", Proto:"IOT/1.1", Method:"POST", Path:"/b", Host:"b.com", Header:Header{"B":"c"}, Body: "bbbb"},
+		{Nonce:"3", Proto:"IOT/2.1", Method:"GET", Path:"/c", Host:"c.com", Header:Header{"C":"c"}, Body: "cccc", err:true},
 	}
 	for index, test := range tests {
 		b, err := json.Marshal(test)
@@ -121,8 +121,8 @@ func Test_readRequest(t *testing.T){
 		if test.Path != req.RequestURI {
 			t.Fatalf("%v, 预测 %v， 错误 %v", index, test.Path, req.RequestURI)
 		}
-		if test.Home != req.Home {
-			t.Fatalf("%v, 预测 %v， 错误 %v", index, test.Home, req.Home)
+		if test.Host != req.Host {
+			t.Fatalf("%v, 预测 %v， 错误 %v", index, test.Host, req.Host)
 		}
 		if len(test.Header) != len(req.Header) {
 			t.Fatalf("%v, 预测 %v， 错误 %v", index, test.Header, req.Header)

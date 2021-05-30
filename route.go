@@ -4,6 +4,8 @@ import(
 	"sync"
 	"regexp"
 	"fmt"
+	"path"
+	"strings"
 )
 
 type Route struct{
@@ -27,34 +29,46 @@ func (T *Route) HandleFunc(url string,  handler func(w ResponseWriter, r *Reques
 //	w ResponseWriter    响应
 //	r *Request          请求
 func (T *Route) ServeIOT(w ResponseWriter, r *Request){
-	path := r.URL.Path
+	upath := r.URL.Path
 	inf, ok := T.rt.Load(r.URL.Path)
 	if ok {
 		inf.(Handler).ServeIOT(w, r)
-		if path == r.URL.Path {
+		if upath == r.URL.Path {
 			return
 		}
 	}else{
 		var handleFunc Handler
 		T.rt.Range(func(k, v interface{}) bool {
-	        regexpRegexp, err := regexp.Compile(k.(string))
-	        if err != nil {
-	            return true
-	        }
-	        _, complete := regexpRegexp.LiteralPrefix()
-	        if !complete {
-           		regexpRegexp.Longest()
-		        if regexpRegexp.MatchString(r.URL.Path) {
-		        	ok = true
-		            handleFunc = v.(Handler)
-		            return false
+			pattern := k.(string)
+			//正则
+			if strings.HasPrefix(pattern, "^") || strings.HasSuffix(pattern, "$") {
+		        regexpRegexp, err := regexp.Compile(pattern)
+		        if err != nil {
+		            return true
 		        }
-	        }
+		        _, complete := regexpRegexp.LiteralPrefix()
+		        if !complete {
+	           		regexpRegexp.Longest()
+			        if regexpRegexp.MatchString(r.URL.Path) {
+			        	ok = true
+			            handleFunc = v.(Handler)
+			            return false
+			        }
+		        }
+				return true
+			}
+			//通配符
+			matched, _ := path.Match(pattern, r.URL.Path)
+			if matched {
+	        	ok = true
+	            handleFunc = v.(Handler)
+	            return false
+			}
 			return true
 		});
 		if ok {
 			handleFunc.ServeIOT(w, r)
-			if path == r.URL.Path {
+			if upath == r.URL.Path {
 				return
 			}
 		}
@@ -69,5 +83,5 @@ func (T *Route) ServeIOT(w ResponseWriter, r *Request){
 	//默认的错误处理
 	w.Status(404)
 	w.Header().Set("Connection","close")
-	w.SetBody(fmt.Sprintf("The path does not exist %s", path))
+	w.SetBody(fmt.Sprintf("The path does not exist %s", upath))
 }

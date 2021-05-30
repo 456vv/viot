@@ -22,7 +22,7 @@ type RequestConfig struct{
 	Proto 	string				`json:"proto"`
 	Method 	string				`json:"method"`
 	Path 	string				`json:"path"`
-	Home	string				`json:"home"`
+	Host	string				`json:"host"`
 	Header 	Header				`json:"header"`
 	body 	interface{}
 }
@@ -70,7 +70,7 @@ type reqBody struct{
 
 type Request struct {
 	nonce 		string														// 编号
-	Home		string														// 身份
+	Host		string														// 身份
 	Method		string														// 方法
 	RequestURI	string														// 请求URL
 	URL 		*url.URL													// 路径
@@ -112,7 +112,7 @@ func (T *Request) GetBody(i interface{}) error {
 	err := json.NewDecoder(T.datab).Decode(&reqBody{i})
 	if err == nil {
 		T.datab = nil
-	}	
+	}
 	return err
 }
 
@@ -207,18 +207,18 @@ func (T *Request) SetTokenAuth(token string) {
 //	err error			错误
 func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
 
-	home := T.Home
+	host := T.Host
 	path := T.RequestURI
 	if T.URL != nil {
-		if home == "" {
-			home = T.URL.Host
+		if host == "" {
+			host = T.URL.Host
 		}
 		if path == "" {
 			path = T.URL.RequestURI()
 		}
 	}
-	if home == "" {
-		return nil, ErrHomeInvalid
+	if host == "" {
+		return nil, ErrHostInvalid
 	}
 	if path == "" {
 		return nil, ErrURIInvalid
@@ -241,7 +241,7 @@ func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
 		Proto	: proto,
 		Method	: T.Method,
 		Path	: path,
-		Home	: home,
+		Host	: host,
 		Header	: T.Header.Clone(),
 	}
 	
@@ -256,13 +256,3 @@ func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
 	riot.SetBody(&T.bodyw)
 	return riot, nil
 }
-
-
-
-
-
-
-
-
-
-

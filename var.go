@@ -13,25 +13,23 @@ const DefaultLineBytes = 1 << 20 // 1 MB
 // maxInt32是服务器和传输的字节限制读取器的有效“无限”值。
 const maxInt32 int = 1<<31 - 1
 var (
-  	ErrBodyNotAllowed 	= errors.New("The request method or status code is not allowed")
-	ErrGetBodyed		= errors.New("Does not support repeated reading of body")
-  	ErrHijacked 		= errors.New("Connection has been hijacked")
-  	ErrLaunched			= errors.New("The connection is waiting for the response of the active request")
-	ErrAbortHandler 	= errors.New("Abort processing")
-	ErrServerClosed 	= errors.New("Server is down")
-	ErrDoned			= errors.New("Has been completed")
-	ErrConnClose		= errors.New("Device connection is closed")
-	ErrReqUnavailable	= errors.New("Request unavailable")
+  	ErrBodyNotAllowed 	= errors.New("viot: The request method or status code is not allowed")
+	ErrGetBodyed		= errors.New("viot: Does not support repeated reading of body")
+  	ErrHijacked 		= errors.New("viot: Connection has been hijacked")
+  	ErrLaunched			= errors.New("viot: The connection is waiting for the response of the active request")
+  	ErrRwaControl		= errors.New("viot: Processing the original data")
+	ErrAbortHandler 	= errors.New("viot: Abort processing")
+	ErrServerClosed 	= errors.New("viot: Server is down")
+	ErrDoned			= errors.New("viot: Has been completed")
+	ErrConnClose		= errors.New("viot: Device connection is closed")
+	ErrReqUnavailable	= errors.New("viot: Request unavailable")
+	ErrRespUnavailable	= errors.New("viot: Response unavailable")
 	
-	ErrHomeInvalid		= errors.New("viot: Home invalid")
-	ErrURIInvalid		= errors.New("viot: URI invalid")
-	ErrProtoInvalid		= errors.New("viot: Proto Invalid")
-	ErrMethodInvalid	= errors.New("viot: Method Invalid")
+	ErrHostInvalid		= errors.New("Host invalid")
+	ErrURIInvalid		= errors.New("URI invalid")
+	ErrProtoInvalid		= errors.New("Proto Invalid")
+	ErrMethodInvalid	= errors.New("Method Invalid")
 )
-var (
-	errTooLarge 		= errors.New("Request data is too large")
-)
-
 
 //检测服务器下线时间间隔
 var shutdownPollInterval = 500 * time.Millisecond
@@ -42,6 +40,12 @@ var aLongTimeAgo = time.Unix(1, 0)
 //方法集
 var methods	= []string{"GET","POST","HEAD","PUT","DELETE","OPTIONS"}
 
+//请求特征
+var reqFeature1 = []string{"\"nonce\"","\"proto\"","\"method\"","\"path\"","\"home\""}//过时的，暂时保留
+var reqFeature2 = []string{"\"nonce\"","\"proto\"","\"method\"","\"path\"","\"host\""}
+//响应特征
+var respFeature1 = []string{"\"nonce\"","\"status\""}
+
 //内部模板函数
 var TemplateFunc = vweb.TemplateFunc
 
@@ -49,3 +53,5 @@ type Session = vweb.Session
 type Sessions = vweb.Sessions
 type Globaler = vweb.Globaler
 type Sessioner = vweb.Sessioner
+type SiteMan = vweb.SiteMan
+type Site = vweb.Site

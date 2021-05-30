@@ -11,7 +11,7 @@ import(
 
 type Client struct{
 	Dialer				vconnpool.Dialer	//拨号
-	Home				string				//Home
+	Host				string				//Host
 	Addr				string				//服务器地址
 	WriteDeadline		time.Duration		//写入连接超时
 	ReadDeadline		time.Duration		//读取连接超时
@@ -49,7 +49,7 @@ func (T *Client) GetCtx(ctx context.Context, urlstr string, header Header) (resp
 		Proto		: "IOT/1.1",
 		Method		: "GET",
 		RequestURI	: u.RequestURI(),
-		Home		: u.Host,
+		Host		: u.Host,
 		Header		: header.Clone(),
 	}
 	return T.DoCtx(ctx, req)
@@ -77,8 +77,8 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 		}
 	}()
 	
-	if req.Home == "" {
-		req.Home = T.Home
+	if req.Host == "" {
+		req.Host = T.Host
 	}
 	//生成编号
 	nonce, err := Nonce()
@@ -99,7 +99,7 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 	//创建连接
 	addr := T.Addr
 	if addr == "" {
-		addr = req.Home
+		addr = req.Host
 	}
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
@@ -173,7 +173,7 @@ func (T *Client) PostCtx(ctx context.Context, urlstr string, header Header, body
 		Proto		: "IOT/1.1",
 		Method		: "POST",
 		RequestURI	: u.RequestURI(),
-		Home		: u.Host,
+		Host		: u.Host,
 		Header		: header.Clone(),
 	}
 	req.SetBody(body)

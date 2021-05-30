@@ -3,7 +3,6 @@ package viot
 import (
 	"net"
 	"bufio"
-	"sync/atomic"
 	"errors"
 )
 
@@ -22,12 +21,22 @@ type Hijacker interface {
 
 //连接关闭通知接口
 type CloseNotifier interface {
-	CloseNotify() <-chan bool												// 关闭通知
- }
- 
- //发射，服务器使用当前连接作为客户端给智能设置发送信息
- type Launcher interface{
+	CloseNotify() <-chan error												// 关闭通知
+}
+
+//缓冲
+ type Flusher interface {
+    Flush()                                                                 // 刷新缓冲
+}
+
+//发射，服务器使用当前连接作为客户端给智能设置发送信息
+type Launcher interface{
     Launch() RoundTripper
+}
+
+//源控制，用于临时处理原始数据
+type RawControler interface{
+	RawControl(f func(net.Conn, *bufio.Reader) error)						// 返回错误关闭连接
 }
  
 //响应
@@ -35,19 +44,16 @@ type responseWrite struct{
 	conn             	*conn												// 上级
   	req              	*Request 											// 上级
 	closeNotifyCh  		chan bool											// 收到数据，处理还没结束的时候。客户端又发来请求。则取消现有的请求，接受新的请求
-	didCloseNotify 		int32 												// atomic (only 0->1 winner should send)
 
   	wroteStatus      	bool												// 状态写入
 	status        		int													// 状态码
-		
-  	cw 					chunkWriter											// body数据和组装数据
-  	
  	header 				Header												// 标头
+
+  	dw 					dataWriter											// body数据和组装数据
 
   	closeAfterReply 	bool												// 服务端设置不关闭连接
   	
   	handlerDone 		atomicBool 											// 判断本次响应是否已经完成
-  	
   	isWrite				bool												// 原样数据写入
  }
 
@@ -55,15 +61,15 @@ type responseWrite struct{
 //原样写入
 //	b []byte	字节串
 //	int, error	写入数量，错误
- func (T *responseWrite) Write(b []byte) (int, error) {
+func (T *responseWrite) Write(b []byte) (int, error) {
  	 return T.write(len(b), b, "")
 }
- func (T *responseWrite) WriteString(s string) (n int, err error) {
- 	 return T.write(len(s), nil, s)
- }
- func (T *responseWrite) write(lenData int, dataB []byte, dataS string) (n int, err error) {
+func (T *responseWrite) WriteString(s string) (n int, err error) {
+	return T.write(len(s), nil, s)
+}
+func (T *responseWrite) write(lenData int, dataB []byte, dataS string) (n int, err error) {
 	if T.conn.hijackedv.isTrue() {
-  		T.conn.server.logf("viot: 此连接已经劫持，不允许使用此函数Write")
+  		T.conn.server.logf(LogErr, "viot: 此连接已经劫持，不允许使用此函数Write")
   		return 0, ErrHijacked
   	}
   	
@@ -75,13 +81,18 @@ type responseWrite struct{
 		return T.conn.bufw.Write(dataB)
 	}
 	return T.conn.bufw.WriteString(dataS)
- }
+}
+
+//缓冲刷入
+func (T *responseWrite) Flush(){
+ 	T.conn.bufw.Flush()
+}
 
 //写入状态
 //	code int	状态码
 func (T *responseWrite) Status(code int) {
 	if T.conn.hijackedv.isTrue() {
-  		T.conn.server.logf("viot: 此连接已经劫持，不允许使用此函数 .Status()")
+  		T.conn.server.logf(LogErr, "viot: 此连接已经劫持，不允许使用此函数 .Status()")
   		return
   	}
   	T.wroteStatus = true
@@ -114,7 +125,7 @@ func (T *responseWrite) Header() Header {
 //	error				错误
 func (T *responseWrite) SetBody(data interface{}) error {
 	if T.conn.hijackedv.isTrue() {
-  		T.conn.server.logf("viot: 此连接已经劫持，不允许使用此函数 .SetBody()")
+  		T.conn.server.logf(LogErr, "viot: 此连接已经劫持，不允许使用此函数 .SetBody()")
   		return ErrHijacked
   	}
   	
@@ -124,24 +135,17 @@ func (T *responseWrite) SetBody(data interface{}) error {
   		return ErrBodyNotAllowed
   	}
   	
-  	return T.cw.SetBody(data)
-}
-
-//设置关闭通知
-func (T *responseWrite) closeNotify() {
-	//防止多次调用
-	if atomic.CompareAndSwapInt32(&T.didCloseNotify, 0, 1) {
-		T.closeNotifyCh <- true
-	}
+  	return T.dw.SetBody(data)
 }
 
 //读取关闭通知
 //	<-chan bool		关闭事件
-func (T *responseWrite) CloseNotify() <-chan bool {
+func (T *responseWrite) CloseNotify() <-chan error {
   	if T.handlerDone.isTrue() {
-  		panic("viot: 响应处理完成，不允许再调用CloseNotify")
+  		panic("viot: Response processing，Not allowed to call CloseNotify()")
   	}
-  	return T.closeNotifyCh
+  	
+  	return T.conn.vc.CloseNotify()
 }
 
 //完成
@@ -149,7 +153,10 @@ func (T *responseWrite) done() error {
  	T.handlerDone.setTrue() //设置完成标识
  	var err error
  	if !T.isWrite {
- 		err = T.cw.done()
+ 		if err = T.dw.done(); err == nil {
+  			T.conn.bufw.Write([]byte("\n"))
+ 		}
+ 		
  	}
  	T.conn.bufw.Flush()
  	return err
@@ -173,17 +180,8 @@ func (T *responseWrite) Launch() RoundTripper {
 	return T.conn
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+//源连接控制
+//	f func(net.Conn, *bufio.Reader) error 控制函数，返回错误退出结束连接
+func (T *responseWrite) RawControl(f func(net.Conn, *bufio.Reader) error) {
+	T.conn.RawControl(f)
+}
