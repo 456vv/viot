@@ -60,30 +60,16 @@ type conn struct {
 	handleFunc	func(net.Conn, *bufio.Reader) error
 }
 
-func (T *conn) security() error {
+func (T *conn) RawControl(f func(net.Conn, *bufio.Reader) error) error {
   	if T.closed {
   		return ErrConnClose
-  	}
-  	
-  	//判断是否有主动请求
-  	if T.inLaunch() {
-  		return ErrLaunched
   	}
   	
   	//判断劫持
   	if T.hijackedv.isTrue() {
   		return ErrHijacked
   	}
-  	return nil
-}
-
-func (T *conn) RawControl(f func(net.Conn, *bufio.Reader) error) error {
-  	T.mu.Lock()
-  	defer T.mu.Unlock()
   	
-  	if err := T.security(); err != nil {
-  		return err
-  	}
   	T.handleFunc = f
   	return nil
 }
@@ -93,8 +79,18 @@ func (T *conn) hijackLocked() (vc net.Conn, buf *bufio.ReadWriter, err error) {
   	T.mu.Lock()
   	defer T.mu.Unlock()
   	
-  	if err := T.security(); err != nil {
-  		return nil, nil, err
+  	if T.closed {
+  		return nil, nil, ErrConnClose
+  	}
+  	
+  	//判断是否有主动请求
+  	if T.inLaunch() {
+  		return nil, nil, ErrLaunched
+  	}
+  	
+  	//判断劫持
+  	if T.hijackedv.isTrue() {
+  		return nil, nil, ErrHijacked
   	}
   	
   	//处理原始数据，防止冲突
@@ -108,6 +104,7 @@ func (T *conn) hijackLocked() (vc net.Conn, buf *bufio.ReadWriter, err error) {
   	T.vc.DisableBackgroundRead(false)
   	//退出空闲读取idleWait
   	T.vc.SetReadDeadline(aLongTimeAgo)
+  	T.vc.SetReadDeadline(time.Time{})
   	
   	T.setState(StateHijacked)
 	
@@ -353,7 +350,7 @@ func (T *conn) serve(ctx context.Context) {
 		}
 		
 		//自定义连接处理函数
-		if hf :=T.handleFunc; hf != nil {
+		if hf :=T.handleFunc; hf != nil && !T.inLaunch() {
 			if err := hf(T.vc, T.bufr); err != nil {
 				T.server.logf(LogErr, "从IP(%v)处理原始数据发生错误（%v）", T.remoteAddr, err)
 				return
@@ -375,12 +372,13 @@ func (T *conn) serve(ctx context.Context) {
 			return
 		}
 		
-		T.server.logf(LogDebug, "viot: 从远程IP(%s)读取数据行line:\n%s\n", T.remoteAddr, lineBytes)
+		T.server.logf(LogDebug, "viot: 从远程IP(%s)读取数据行line:\n%x\n%s\n", T.remoteAddr, lineBytes, lineBytes)
 		
 		//空行跳过
 		if len(lineBytes) == 0 {
 			continue
 		}
+
 		//设备发来请求，等待服务器响应信息
 		req, err := T.readRequest(T.ctx, lineBytes)
 		//不是有效请求
@@ -408,10 +406,11 @@ func (T *conn) serve(ctx context.Context) {
 				//等待数据，读取超时就退出
 				return
 			}
+			
 			continue
 		}
 		if err != nil {
-			fmt.Fprintf(T.rwc, `{"status":400,"nonce":"-1","header":{"Connection":"close"},"body":%q}\n`,"Bad Request: "+err.Error())
+			fmt.Fprintf(T.rwc, `{"nonce":"-1","status":400,"header":{"Connection":"close"},"body":%q}\n`,"Bad Request: "+err.Error())
 			T.closeWriteAndWait()
 			return
 		}
