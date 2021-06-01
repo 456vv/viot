@@ -217,7 +217,6 @@ type ServerHandlerDynamic struct {                                          // �
     func (T *ServerHandlerDynamic) ParseFile(path string) error                                 // 解析模板文件
     func (T *ServerHandlerDynamic) ParseText(content, name string) error                        // 解析模板文本
     func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request)                    // 服务IOT
-var DefaultDialer = &vconnpool.ConnPool{...}                                    // 默认拨号
 type Client struct{                                                             // 客户端
     Dialer              vconnpool.Dialer                                            // 拨号
     Host                string                                                      // Host

@@ -8,17 +8,6 @@ import(
 	"net"
 )
 
-var DefaultDialer = &vconnpool.ConnPool{
-	Dialer: &net.Dialer{
-        Timeout:   30 * time.Second,
-        KeepAlive: 30 * time.Second,
-        DualStack: true,
-    },
-	IdeConn: 100, 
-	MaxConn: 0,
-	IdeTimeout: 30 * time.Second,
-}
-
 type Client struct{
 	Dialer				vconnpool.Dialer	//拨号
 	Host				string				//Host
