@@ -372,13 +372,14 @@ func (T *conn) serve(ctx context.Context) {
 			return
 		}
 		
-		T.server.logf(LogDebug, "viot: 从远程IP(%s)读取数据行line:\n%x\n%s\n", T.remoteAddr, lineBytes, lineBytes)
-		
-		//空行跳过
+		//开始发数据，前面有很多空行。需要跳过空行
+		//这样的情况需要处理\n\n\n\n\n{....}\n
 		if len(lineBytes) == 0 {
 			continue
 		}
-
+		
+		T.server.logf(LogDebug, "viot: 从远程IP(%s)读取数据行line:\n%x\n%s\n", T.remoteAddr, lineBytes, lineBytes)
+		
 		//设备发来请求，等待服务器响应信息
 		req, err := T.readRequest(T.ctx, lineBytes)
 		//不是有效请求
@@ -504,8 +505,25 @@ var connStateInterface = [...]interface{}{
 }
 
 func (T *conn) idleWait() error {
+	//空闲等待，自动处理多余的换行符
+	first := time.Now()
+	for {
+		if d := T.server.idleTimeout(); d != 0 {
+			T.rwc.SetReadDeadline(first.Add(d))
+		}
+		c, err := T.bufr.ReadByte()
+		if err != nil {
+			return err
+		}
+		if c == '\n' || c == '\r' {
+			continue
+		}
+		T.bufr.UnreadByte()
+		break
+	}
+	
 	if d := T.server.idleTimeout(); d != 0 {
-		T.rwc.SetReadDeadline(time.Now().Add(d))
+		T.rwc.SetReadDeadline(first.Add(d))
 	}
 	if _, err := T.bufr.Peek(4); err != nil {
 		return err
