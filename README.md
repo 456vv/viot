@@ -217,12 +217,13 @@ type ServerHandlerDynamic struct {                                          // �
     func (T *ServerHandlerDynamic) ParseFile(path string) error                                 // 解析模板文件
     func (T *ServerHandlerDynamic) ParseText(content, name string) error                        // 解析模板文本
     func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request)                    // 服务IOT
-type Client struct{
-    Dialer              vconnpool.Dialer                                        // 拨号
-    Host                string                                                  // Host
-    Addr                string                                                  // 服务器地址
-    WriteDeadline       time.Duration                                           // 写入连接超时
-    ReadDeadline        time.Duration                                           // 读取连接超时
+var DefaultDialer = &vconnpool.ConnPool{...}                                    // 默认拨号
+type Client struct{                                                             // 客户端
+    Dialer              vconnpool.Dialer                                            // 拨号
+    Host                string                                                      // Host
+    Addr                string                                                      // 服务器地址
+    WriteDeadline       time.Duration                                               // 写入连接超时
+    ReadDeadline        time.Duration                                               // 读取连接超时
 }
     func (T *Client) Get(url string, header Header) (resp *Response, err error)                             // 快速读取
     func (T *Client) GetCtx(ctx context.Context, urlstr string, header Header) (resp *Response, err error)  // 快速读取（上下文）

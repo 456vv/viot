@@ -46,8 +46,9 @@ func (T serverHandler) ServeIOT(rw ResponseWriter, req *Request) {
 
 type LogLevel int
 const (
-    LogErr LogLevel    = 1 << iota		//1
-    LogDebug							//2
+	LogNone LogLevel    = 1 << iota		//1
+    LogErr								//2
+    LogDebug							//4
 )
 
 //服务器
