@@ -8,6 +8,7 @@ import(
 	"encoding/json"
 	"strings"
 	"fmt"
+	"github.com/456vv/vweb/v2/builtin"
 )
 
 //iot接收或发送数据格式带BODY
@@ -103,6 +104,12 @@ func (T *Request) GetBody(i interface{}) error {
 		return ErrGetBodyed
 	}
 	T.getbodyed = true
+	
+	//这是开发者自行创建的Request，设置SetBody后可以调用GetBody读出
+	if T.bodyw != nil {
+		builtin.GoTypeTo(i)(T.bodyw)
+		return nil
+	}
 	
 	//非 POST 提交，不支持提取BODY数据
 	if T.datab == nil {
