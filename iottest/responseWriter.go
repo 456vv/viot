@@ -6,6 +6,7 @@ import(
 	"strings"
 	"bufio"
 	"net"
+	"context"
 )
 
 type ResponseWrite struct{
@@ -15,11 +16,18 @@ type ResponseWrite struct{
 	
 	//服务端的连接
 	conn net.Conn
+	
+	rr func(*viot.Request)(*viot.Response, error)
 }
-func (T *ResponseWrite) ClientConn(client func(net.Conn)) {
+
+func (T *ResponseWrite) HookHijack(client func(net.Conn)) {
 	C2S("127.0.0.1:0", func(c net.Conn){
 		T.conn = c
 	}, client)
+}
+
+func (T *ResponseWrite) HookRoundTrip(rr func(*viot.Request)(*viot.Response, error)){
+	T.rr = rr
 }
 
 func (T *ResponseWrite) Flush(){}
@@ -67,6 +75,21 @@ func (T *ResponseWrite) Write(buf []byte) (int, error) {
 
 func (T *ResponseWrite) WriteString(str string) (int, error) {
 	return T.Write([]byte(str))
+}
+
+func (T *ResponseWrite) RoundTrip(req *viot.Request) (resp *viot.Response, err error){
+	return T.RoundTripContext(context.Background(), req)
+}
+
+func (T *ResponseWrite) RoundTripContext(ctx context.Context, req *viot.Request) (resp *viot.Response, err error){
+	if T.rr == nil {
+		panic("Need set RoundTripAt")
+	}
+	return T.rr(req)
+}
+
+func (T *ResponseWrite) Launch() viot.RoundTripper {
+	return T
 }
 
 func C2S(addr string, server func(c net.Conn), client func(c net.Conn)) {
