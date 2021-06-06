@@ -83,7 +83,7 @@ func (T *ResponseWrite) RoundTrip(req *viot.Request) (resp *viot.Response, err e
 
 func (T *ResponseWrite) RoundTripContext(ctx context.Context, req *viot.Request) (resp *viot.Response, err error){
 	if T.rr == nil {
-		panic("Need set RoundTripAt")
+		panic("Need set HookRoundTrip")
 	}
 	return T.rr(req)
 }

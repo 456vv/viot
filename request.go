@@ -100,16 +100,17 @@ func (T *Request) GetNonce() string {
 //	i interface{}	数据写入这里
 //	error			错误
 func (T *Request) GetBody(i interface{}) error {
-	if T.getbodyed {
-		return ErrGetBodyed
-	}
-	T.getbodyed = true
 	
 	//这是开发者自行创建的Request，设置SetBody后可以调用GetBody读出
 	if T.bodyw != nil {
 		builtin.GoTypeTo(i)(T.bodyw)
 		return nil
 	}
+	
+	if T.getbodyed {
+		return ErrGetBodyed
+	}
+	T.getbodyed = true
 	
 	//非 POST 提交，不支持提取BODY数据
 	if T.datab == nil {
