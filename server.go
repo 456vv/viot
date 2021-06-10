@@ -314,13 +314,20 @@ func (T *Server) SetKeepAlivesEnabled(v bool) {
 }
 
 //日志
-func (T *Server) logf(level LogLevel, format string, v ...interface{}) error {
-    if T.ErrorLog != nil && T.ErrorLogLevel >= level {
-		err := fmt.Errorf(format+"\n", v...)
-		T.ErrorLog.Output(2, err.Error())
-		return err
+func (T *Server) logf(level LogLevel, format string, v ...interface{}) {
+    if T.ErrorLogLevel >= level {
+		txt := fmt.Sprintf(format+"\n", v...)
+		if T.ErrorLog != nil {
+			T.ErrorLog.Output(2, txt)
+		}
+    	log.Print(txt)
     }
-    return nil
+}
+func (T *Server) logDebugWriteData(addr string, b interface{}){
+	T.logf(LogDebug, "viot: 往IP(%s)写入数据:\n% x\n%s", addr, b, b)
+}
+func (T *Server) logDebugReadData(addr string, b interface{}){
+	T.logf(LogDebug, "viot: 从IP(%s)读取数据:\n% x\n%s", addr, b, b)
 }
 
 //判断服务器是否支持长连接

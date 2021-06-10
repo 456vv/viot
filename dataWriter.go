@@ -66,6 +66,12 @@ func (T *dataWriter) done() error {
 	T.fulfil = true
 	
   	T.generateResponse()//写入
-  	return json.NewEncoder(T.res.conn.bufw).Encode(T.data)
+  	
+  	lineBytes, err := json.Marshal(T.data)
+  	if err != nil {
+  		return err
+  	}
+  	lineBytes = append(lineBytes, '\n')
+  	return T.res.conn.writeLineByte(lineBytes)
 }
 

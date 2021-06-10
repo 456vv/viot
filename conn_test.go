@@ -64,7 +64,7 @@ func Test_conn_readLineBytes(t *testing.T){
 		c.vc	= vconn.NewConn(c.rwc).(*vconn.Conn)
   		c.vc.DisableBackgroundRead(true)
 		c.bufr 	= newBufioReader(c.vc)
-		c.bufw 	= newBufioWriterSize(connWriter{conn:c}, 4<<10)
+		c.bufw 	= newBufioWriterSize(c.vc, 4<<10)
 		c.ctx, c.cancelCtx = context.WithCancel(context.Background())
 		defer c.cancelCtx()
 		
@@ -119,7 +119,7 @@ func Test_conn_readRequest(t *testing.T){
 		c.vc	= vconn.NewConn(c.rwc).(*vconn.Conn)
   		c.vc.DisableBackgroundRead(true)
 		c.bufr 	= newBufioReader(c.vc)
-		c.bufw 	= newBufioWriterSize(connWriter{conn:c}, 4<<10)
+		c.bufw 	= newBufioWriterSize(c.vc, 4<<10)
 		c.ctx, c.cancelCtx = context.WithCancel(context.Background())
 		defer c.cancelCtx()
 		

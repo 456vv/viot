@@ -62,14 +62,16 @@ type responseWrite struct{
 //	b []byte	字节串
 //	int, error	写入数量，错误
 func (T *responseWrite) Write(b []byte) (int, error) {
+  	T.conn.logDebugWriteData(b)
  	 return T.write(len(b), b, "")
 }
 func (T *responseWrite) WriteString(s string) (n int, err error) {
+  	T.conn.logDebugWriteData(s)
 	return T.write(len(s), nil, s)
 }
 func (T *responseWrite) write(lenData int, dataB []byte, dataS string) (n int, err error) {
 	if T.conn.hijackedv.isTrue() {
-  		T.conn.server.logf(LogErr, "viot: 此连接已经劫持，不允许使用此函数Write")
+  		T.conn.server.logf(LogErr, "viot: 此连接已经劫持，不允许使用此函数 .Write()")
   		return 0, ErrHijacked
   	}
   	
@@ -151,15 +153,10 @@ func (T *responseWrite) CloseNotify() <-chan error {
 //完成
 func (T *responseWrite) done() error {
  	T.handlerDone.setTrue() //设置完成标识
- 	var err error
  	if !T.isWrite {
- 		if err = T.dw.done(); err == nil {
-  			T.conn.bufw.Write([]byte("\n"))
- 		}
- 		
+ 		return T.dw.done()
  	}
- 	T.conn.bufw.Flush()
- 	return err
+ 	return nil
 }
 
 //劫持连接

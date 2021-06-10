@@ -131,6 +131,7 @@ func putTextprotoReader(r *textproto.Reader) {
 func ReadRequest(b io.Reader) (req *Request, err error) {
 	return readRequest(b)
 }
+
 func readRequest(b io.Reader) (req *Request, err error) {
 	bufr := newBufioReader(b)
   	defer func(){
@@ -144,7 +145,7 @@ func readRequest(b io.Reader) (req *Request, err error) {
   	req.datab = new(bytes.Buffer)
 	//{json}
   	
-	var ij RequestConfig
+	var ij pastRequestConfig
 	err = json.NewDecoder( io.TeeReader(bufr, req.datab) ).Decode(&ij)
 	if err != nil {
 		return nil, fmt.Errorf("Incorrect format of request content %v", err)
@@ -178,6 +179,10 @@ func readRequest(b io.Reader) (req *Request, err error) {
 		if !httpguts.ValidHeaderFieldValue(hv) {
 			return nil, fmt.Errorf("Invalid header value %s", hv)
 		}
+	}
+	if ij.Home != "" && ij.Host == "" {
+		//向下兼容，已经过期
+		ij.Host = ij.Home
 	}
   	req.nonce		= ij.Nonce
 	req.Method 		= ij.Method

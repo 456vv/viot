@@ -46,9 +46,8 @@ type conn struct {
   	rwc 		net.Conn						// 上级，原始连接
   	ctx			context.Context					// 上下文
 	cancelCtx 	context.CancelFunc				// 取消上下文
-	remoteAddr 	string							// 远程IP
+	remoteAddr 	string							// IP
 	tlsState 	*tls.ConnectionState			// TLS状态
-	werr error									// 写错误
 	vc 			*vconn.Conn						// 读取
 	bufr *bufio.Reader							// 读缓冲
 	bufw *bufio.Writer							// 写缓冲
@@ -180,20 +179,10 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
   	defer close(done)
   	defer delete(T.activeReq, nonce)
 	
-	//设置写入超时
-	if d := T.server.WriteTimeout; d != 0 {
-  		T.rwc.SetWriteDeadline(time.Now().Add(d))
-  	}
-	
-	//客户发送一个请求到设备
-	n, err := T.bufw.Write(reqByte)
+	err = T.writeLineByte(reqByte)
 	if err != nil {
 		return nil, err
 	}
-	if rbn := len(reqByte); n != rbn {
-		return nil, fmt.Errorf("Actual data length %d，Length of sent data %d", rbn, n)
-	}
-	T.bufw.Flush()
 	
 	T.mu.Unlock()
 	defer T.mu.Lock()
@@ -208,6 +197,27 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		res.Request = req
 		return res, nil
 	}
+}
+
+//写入一行数据
+func (T *conn) writeLineByte(b []byte) error {
+	//设置写入超时
+	if d := T.server.WriteTimeout; d != 0 {
+  		T.rwc.SetWriteDeadline(time.Now().Add(d))
+  	}
+  	
+  	T.logDebugWriteData(b)
+	
+	//客户发送一个请求到设备
+	n, err := T.bufw.Write(b)
+	if err != nil {
+		return  err
+	}
+	if rbn := len(b); n != rbn {
+		return fmt.Errorf("Actual data length %d，Length of sent data %d", rbn, n)
+	}
+	T.bufw.Flush()
+	return nil
 }
 
 //读取一行数据
@@ -232,6 +242,9 @@ func (T *conn) readLineBytes() (b []byte, err error) {
   	if err != nil {
   		return nil, err
   	}
+  	
+  	T.logDebugReadData(b)
+	
 	return b, err
 }
 
@@ -299,14 +312,16 @@ func (T *conn) serve(ctx context.Context) {
 			const size = 64 << 10
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
-			T.server.logf(LogErr, "viot: work accidental error %v: %v\n%s", T.remoteAddr, err, buf)
+			T.server.logf(LogErr, "viot: 工作意外错误 %v: %v\n%s", T.remoteAddr, err, buf)
 		}
-		if !T.hijackedv.isTrue() {
-			T.server.logf(LogDebug, "viot: 远程IP(%s)断开网络", T.remoteAddr)
-			T.Close()
+		if T.hijackedv.isTrue() {
+			T.server.logf(LogDebug, "viot: 自IP(%s)使用权已交给Hijacked", T.remoteAddr)
+			return
 		}
+		T.server.logf(LogDebug, "viot: 自IP(%s)断开网络", T.remoteAddr)
+		T.Close()
 	}()
-	T.server.logf(LogDebug, "viot: 远程IP(%s)连接网络", T.remoteAddr)
+	T.server.logf(LogDebug, "viot: 自IP(%s)连接网络", T.remoteAddr)
 
 	if tlsConn, ok := T.rwc.(*tls.Conn); ok {
 		if d := T.server.ReadTimeout; d != 0 {
@@ -316,7 +331,7 @@ func (T *conn) serve(ctx context.Context) {
 			T.rwc.SetWriteDeadline(time.Now().Add(d))
 		}
 		if err := tlsConn.Handshake(); err != nil {
-			T.server.logf(LogErr, "viot: the TLS handshake error %s: %v", T.rwc.RemoteAddr(), err)
+			T.server.logf(LogErr, "viot: TLS 握错误 %s: %v", T.remoteAddr, err)
 			return
 		}
 		T.tlsState = new(tls.ConnectionState)
@@ -337,7 +352,7 @@ func (T *conn) serve(ctx context.Context) {
 	T.vc	= vconn.NewConn(T.rwc).(*vconn.Conn)
   	T.vc.DisableBackgroundRead(true)
 	T.bufr 	= newBufioReader(T.vc)
-	T.bufw 	= newBufioWriterSize(&connWriter{conn:T}, 4<<10)
+	T.bufw 	= newBufioWriterSize(T.vc, 4<<10)
 	
 	//连接的上下文
 	T.ctx, T.cancelCtx = context.WithCancel(ctx)
@@ -352,7 +367,7 @@ func (T *conn) serve(ctx context.Context) {
 		//自定义连接处理函数
 		if hf :=T.handleFunc; hf != nil && !T.inLaunch() {
 			if err := hf(T.vc, T.bufr); err != nil {
-				T.server.logf(LogErr, "从IP(%v)处理原始数据发生错误（%v）", T.remoteAddr, err)
+				T.server.logf(LogErr, "viot: 从IP(%v)处理原始数据错误（%v）", T.remoteAddr, err)
 				return
 			}
 			T.handleFunc = nil
@@ -368,7 +383,8 @@ func (T *conn) serve(ctx context.Context) {
 			if isCommonNetReadError(err) {
 				return
 			}
-			T.server.logf(LogErr, "从IP(%v)接收到数据读取\"行\"发生错误（%v）", T.remoteAddr, err)
+			
+			T.logErrReceive(err)
 			return
 		}
 		
@@ -378,8 +394,6 @@ func (T *conn) serve(ctx context.Context) {
 			continue
 		}
 		
-		T.server.logf(LogDebug, "viot: 从远程IP(%s)读取数据行line:\n%x\n%s\n", T.remoteAddr, lineBytes, lineBytes)
-		
 		//设备发来请求，等待服务器响应信息
 		req, err := T.readRequest(T.ctx, lineBytes)
 		//不是有效请求
@@ -387,7 +401,7 @@ func (T *conn) serve(ctx context.Context) {
 			if T.inLaunch(){
 				res, err := T.readResponse(T.ctx, lineBytes)
 				if err != nil {
-					T.server.logf(LogErr, fmt.Errorf("从IP(%v)接收到数据读取\"响应\"发生错误（%v）", T.remoteAddr, err).Error())
+					T.logErrReceive(err)
 					//不能识别的数据
 					return
 				}
@@ -401,8 +415,8 @@ func (T *conn) serve(ctx context.Context) {
 					}
 				}
 				T.mu.Unlock()
-				T.setState(StateIdle)
 			}
+			
 			if err = T.idleWait(); err != nil {
 				//等待数据，读取超时就退出
 				return
@@ -411,7 +425,8 @@ func (T *conn) serve(ctx context.Context) {
 			continue
 		}
 		if err != nil {
-			fmt.Fprintf(T.rwc, `{"nonce":"-1","status":400,"header":{"Connection":"close"},"body":%q}\n`,"Bad Request: "+err.Error())
+			etxt := fmt.Sprintf("{\"nonce\":\"-1\",\"status\":400,\"header\":{\"Connection\":\"close\"},\"body\":%q}\n","Bad Request: "+err.Error())
+			T.writeLineByte([]byte(etxt))
 			T.closeWriteAndWait()
 			return
 		}
@@ -440,10 +455,13 @@ func (T *conn) serve(ctx context.Context) {
 		}
 		
 		//设置完成，生成body，发送至客户端
-		w.done()
+		if err := w.done(); err != nil {
+			T.server.logf(LogErr, "viot: 往IP(%s)写入数据错误（%v）", T.remoteAddr, err)
+			return
+		}
 		
 		//不能重用连接，客户端 或 服务端设置了不支持重用
-		if w.closeAfterReply  || T.werr != nil {
+		if w.closeAfterReply  {
 			T.closeWriteAndWait()
 			return
 		}
@@ -453,8 +471,6 @@ func (T *conn) serve(ctx context.Context) {
 			return
 		}
 		
-		T.setState(StateIdle)
-
 		if err = T.idleWait(); err != nil {
 			//等待数据，读取超时就退出
 			return
@@ -505,6 +521,9 @@ var connStateInterface = [...]interface{}{
 }
 
 func (T *conn) idleWait() error {
+	
+	T.setState(StateIdle)
+	
 	//空闲等待，自动处理多余的换行符
 	first := time.Now()
 	for {
@@ -548,7 +567,7 @@ func (T *conn) finalFlush() {
 
 // rstAvoidanceDelay是在关闭整个套接字之前关闭TCP连接的写入端之后我们休眠的时间量。 
 // 通过睡眠，我们增加了客户端看到我们的FIN并处理其最终数据的机会，然后再处理后续的RS，从而关闭已知未读数据的连接。 
-// 这个RST似乎主要发生在BSD系统上。 （和Windows？）这个超时有点武断（大概的延迟）。
+// 这个RST似乎主要在BSD系统上。 （和Windows？）这个超时有点武断（大概的延迟）。
 const rstAvoidanceDelay = 500 * time.Millisecond
 type closeWriter interface {
   	CloseWrite() error
@@ -581,18 +600,13 @@ func (T *conn) Close() error {
  	return T.rwc.Close()
 }
 
-//connWriter==================================================================================================================================
-//检查写入错误
-type connWriter struct {
-	conn *conn																	// 上级
+
+func (T *conn) logDebugWriteData(a interface{}){
+	T.server.logDebugWriteData(T.remoteAddr, a)
 }
-//写入
-func (T connWriter) Write(p []byte) (n int, err error) {
-	n, err = T.conn.rwc.Write(p)
-	if err != nil && T.conn.werr == nil {
-		T.conn.werr = err
-		T.conn.server.logf(LogErr, "viot: 远程IP(%s)数据写入失败error(%s)，预写入data(%s)", T.conn.remoteAddr, err, p)
-		T.conn.cancelCtx()	//取消当前连接的上下文
-	}
-	return
+func (T *conn) logDebugReadData(a interface{}){
+	T.server.logDebugReadData(T.remoteAddr, a)
+}
+func (T *conn) logErrReceive(err error){
+	T.server.logf(LogErr, "viot: 从IP(%v)接收数据错误（%v）", T.remoteAddr, err)
 }

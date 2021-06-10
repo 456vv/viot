@@ -11,6 +11,10 @@ import(
 	"github.com/456vv/vweb/v2/builtin"
 )
 
+type pastRequestConfig struct{
+	*RequestConfig
+	Home	string				`json:"home,omitempty"`
+}
 //iot接收或发送数据格式带BODY
 type requestConfigBody struct{
 	*RequestConfig
@@ -85,7 +89,6 @@ type Request struct {
 	
 	bodyw		interface{}													// 写入的Body数据
 	datab		*bytes.Buffer												// 请求的数据(缓存让GetBody调用)
-	getbodyed	bool														// 判断读取主体
 	ctx			context.Context												// 上下文
   	cancelCtx   context.CancelFunc											// 上下文函数
 
@@ -100,21 +103,15 @@ func (T *Request) GetNonce() string {
 //	i interface{}	数据写入这里
 //	error			错误
 func (T *Request) GetBody(i interface{}) error {
-	
 	//这是开发者自行创建的Request，设置SetBody后可以调用GetBody读出
 	if T.bodyw != nil {
 		builtin.GoTypeTo(i)(T.bodyw)
 		return nil
 	}
 	
-	if T.getbodyed {
-		return ErrGetBodyed
-	}
-	T.getbodyed = true
-	
 	//非 POST 提交，不支持提取BODY数据
 	if T.datab == nil {
-		return ErrBodyNotAllowed
+		return ErrGetBodyed
 	}
 	
 	err := json.NewDecoder(T.datab).Decode(&reqBody{i})
