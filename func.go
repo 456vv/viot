@@ -204,7 +204,6 @@ func ReadResponse(r io.Reader, req *Request) (res *Response, err error){
 		return
 	}
 	res.Request = req
-	res.RemoteAddr = req.RemoteAddr
 	return
 }
 func readResponse(b io.Reader) (res *Response, err error) {

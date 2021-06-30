@@ -59,7 +59,6 @@ func (T *ResponseWrite) Result() *viot.Response {
 		Body: T.Body, 
 		Close: false, 
 		Request: nil, 
-		RemoteAddr: "", 
 	}
 }
 

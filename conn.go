@@ -253,20 +253,27 @@ func (T *conn) readResponse(ctx context.Context, lineBytes []byte) (res *Respons
 	if T.hijackedv.isTrue() {
 		return nil, ErrHijacked
 	}
+	
 	//使用外部解析函数
+	var externalHandle bool
 	if hr := T.server.HandlerResponse; hr != nil {
 		br := bytes.NewReader(lineBytes)
 		res, err = hr(br)
-	}else if isResponse(lineBytes) {
+		if err != nil && err != ErrReqUnavailable {
+			//其它错误
+			return
+		}
+		externalHandle=true
+	}
+	//1，没有外部处理
+	//2，外部处理无法识别
+	if !externalHandle || err == ErrReqUnavailable {
+		if !isResponse(lineBytes) {
+			return nil, ErrRespUnavailable
+		}
 		br := bytes.NewReader(lineBytes)
 		res, err = readResponse(br)
-	}else{
-		err = ErrRespUnavailable
 	}
-	if err != nil {
-		return
-	}
-	res.RemoteAddr	= T.remoteAddr
 	return
 }
 
@@ -276,17 +283,29 @@ func (T *conn) readRequest(ctx context.Context, lineBytes []byte) (req *Request,
 		return nil, ErrHijacked
 	}
 	//使用外部解析函数
+	var externalHandle bool
 	if hr := T.server.HandlerRequest; hr != nil {
 		br := bytes.NewReader(lineBytes)
 		req, err = hr(br)
-	}else if isRequest(lineBytes) {
+		if err != nil && err != ErrReqUnavailable {
+			//其它错误
+			return
+		}
+		externalHandle=true
+	}
+	
+	//1，没有外部处理
+	//2，外部处理无法识别
+	if !externalHandle || err == ErrReqUnavailable {
+		if !isRequest(lineBytes) {
+			return nil, ErrReqUnavailable
+		}
+		
 		br := bytes.NewReader(lineBytes)
 		req, err = readRequest(br)
-	}else{
-		err = ErrReqUnavailable
-	}
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 	
 	if req.ProtoMajor != 1 {
@@ -296,7 +315,7 @@ func (T *conn) readRequest(ctx context.Context, lineBytes []byte) (req *Request,
 	if req.Host != "" && !httpguts.ValidHostHeader(req.Host) {
 		return nil, errors.New("Malformation Host")
 	}
-
+	
 	req.ctx, req.cancelCtx = context.WithCancel(ctx)
 	req.RemoteAddr	= T.remoteAddr
 	req.TLS			= T.tlsState

@@ -70,10 +70,13 @@ func (T *Client) Do(req *Request) (resp *Response, err error) {
 //	resp *Response			响应
 //	err error				错误
 func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err error){
+	done := make(chan struct{})
 	defer func(){
 		if ctx.Err() != nil {
 			err = ctx.Err()
+			return
 		}
+		done <- struct{}{}
 	}()
 	
 	if req.Host == "" {
@@ -113,6 +116,7 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 		select{
 		case <-ctx.Done():
 			netConn.Close()
+		case <-done:
 		}
 	}()
 	
