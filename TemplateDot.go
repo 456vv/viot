@@ -31,7 +31,7 @@ type TemplateDoter interface{
 type TemplateDot struct {
     R     				*Request                                                               		// 请求
     W    				ResponseWriter                                                         		// 响应
-    Home       		 	*Home                                                                       // 家配置
+    Site       		 	*Site                                                                  		// 站点配置
     Writed      		bool                                                                        // 表示已经调用写入到客户端。这个是只读的
     exchange       		vmap.Map                                                                    // 缓存映射
     ec					vweb.ExitCall																// 退回调用函数
@@ -42,8 +42,8 @@ type TemplateDot struct {
 //	upath string	页面路径
 //	string 			根目录
 func (T *TemplateDot) RootDir(upath string) string {
-	if T.Home != nil && T.Home.RootDir != nil {
-		return T.Home.RootDir(upath)
+	if T.Site != nil && T.Site.RootDir != nil {
+		return T.Site.RootDir(upath)
 	}
 	return "."
 }
@@ -85,23 +85,19 @@ func (T *TemplateDot) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 //	token string	令牌
 //	Sessioner  		会话缓存
 func (T *TemplateDot) Session(token string) Sessioner {	
-	if T.Home == nil || T.Home.Sessions == nil {
+	if T.Site == nil || T.Site.Sessions == nil {
 		return nil
 	}
-	session, ok := T.Home.Sessions.GetSession(token)
-	if !ok {
-		return T.Home.Sessions.SetSession(token, &Session{})
-	}
-	return session
+	return T.Site.Sessions.NewSession(token)
 }
 
 //Global 全站缓存
 //	Globaler	公共缓存
 func (T *TemplateDot) Global() Globaler {
-	if T.Home == nil || T.Home.Global == nil {
+	if T.Site == nil || T.Site.Global == nil {
 		return nil
 	}
-    return T.Home.Global
+    return T.Site.Global
 }
 
 //Swap 信息交换

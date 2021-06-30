@@ -7,72 +7,72 @@ import(
 	"time"
 	"bytes"
 	"io"
-	"strconv"
 	"fmt"
 	"encoding/json"
 	"io/ioutil"
 //	"reflect"
+	"strings"
+	"github.com/456vv/vconn"
 )
 
-func Test_conn_readLineBytes(t *testing.T){
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+func C2S(t *testing.T, addr string, server func(t *testing.T, c net.Conn), client func(t *testing.T, c net.Conn)){
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer l.Close()
 	
-	ss := []string{
-		`{"nonce": "1", "proto":"IOT/1.0", "method":"POST", "header":{}, "home":"a.com", "path":"/a"}`,
-		`{"nonce": "2", "proto":"IOT/1.1", "method":"GET", "header":{}, "home":"b.com", "path":"/b"}`,
-	}
-	var s string
-	for _, vs := range ss {
-		s = fmt.Sprintf("%s%s\n", s, vs)
-	}
-
-	go func(){
-		time.Sleep(time.Second)
+	go func(t *testing.T){
 		laddr := l.Addr().String()
-		b := []byte(s)
 		netConn, err := net.Dial("tcp", laddr)
 		if err != nil {
 			t.Fatal(err)
 		}
-		n, err := netConn.Write(b)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n != len(b) {
-			t.Fatalf("预测 %v, 发送 %v", len(b), n)
-		}
-		io.Copy(ioutil.Discard, netConn)
+		client(t, netConn)
 		netConn.Close()
-	}()
-
-//	for {
+		l.Close()
+	}(t)
+	
+	for {
 		netConn, err := l.Accept()
 		if err != nil {
-			t.Fatal(err)
+			if !strings.Contains(err.Error(), "use of closed network connection") {
+				t.Fatal(err)
+			}
+			return
 		}
+		server(t, netConn)
+	}
+}
+
+func Test_conn_readLineBytes(t *testing.T){
+	ss := []string{
+		`{"nonce": "1", "proto":"IOT/1.0", "method":"POST", "header":{}, "host":"a.com", "path":"/a"}`,
+		`{"nonce": "2", "proto":"IOT/1.1", "method":"GET", "header":{}, "host":"b.com", "path":"/b"}`,
+	}
+	str := strings.Join(ss, "\n")
+
+	C2S(t, "127.0.0.1:0", func(t *testing.T, netConn net.Conn){
 		c := &conn{
 			server: &Server{
-				ReadTimeout: time.Second*3,
+				ReadTimeout: time.Second,
 				WriteTimeout: 0,
 			},
 			rwc: netConn,
 		}
-		c.r 	= &connReader{conn:c}
-		c.bufr 	= newBufioReader(c.r)
-		c.bufw 	= newBufioWriterSize(connWriter{conn:c}, 4<<10)
 		
+		c.vc	= vconn.NewConn(c.rwc).(*vconn.Conn)
+  		c.vc.DisableBackgroundRead(true)
+		c.bufr 	= newBufioReader(c.vc)
+		c.bufw 	= newBufioWriterSize(c.vc, 4<<10)
 		c.ctx, c.cancelCtx = context.WithCancel(context.Background())
+		defer c.cancelCtx()
 		
 		var index int
 		for {
 			lb, err := c.readLineBytes()
 			if err != nil {
-				operr, ok := err.(*net.OpError)
-				if (ok && operr.Timeout()) || err == io.EOF {
+				if isCommonNetReadError(err) {
 					break
 				}
 				t.Fatalf("%d, error(%v)", index, err)
@@ -82,162 +82,108 @@ func Test_conn_readLineBytes(t *testing.T){
 			}
 			index++
 		}
+		
 		c.Close()
+	}, func(t *testing.T,  netConn net.Conn){
+		
+		b := []byte(str)
+		n, err := netConn.Write(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != len(b) {
+			t.Fatalf("预测 %v, 发送 %v", len(b), n)
+		}
+		io.Copy(ioutil.Discard, netConn)
 		netConn.Close()
-//	}
-	time.Sleep(time.Second)
+	})
 }
-
 
 func Test_conn_readRequest(t *testing.T){
 
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	ss := []string{
+		`{"nonce": "1", "proto":"IOT/1.0", "method":"POST", "header":{}, "host":"a.com", "path":"/a"}`,
+		`{"nonce": "2", "proto":"IOT/1.1", "method":"GET", "header":{}, "host":"b.com", "path":"/b"}`,
 	}
-	defer l.Close()
-	
-	go func(){
-		time.Sleep(time.Second)
-		laddr := l.Addr().String()
-		s := `{"nonce": "1", "proto":"IOT/1.0", "method":"POST", "header":{}, "home":"a.com", "path":"/a"}
-			{"nonce": "2", "proto":"IOT/1.1", "method":"GET", "header":{}, "home":"b.com", "path":"/b"}`
-		b := []byte(s)
-		netConn, err := net.Dial("tcp", laddr)
-		n, err := netConn.Write(b)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n != len(b) {
-			t.Fatalf("预测 %v, 发送 %v", len(b), n)
-		}
-		netConn.Close()
-	}()
-	
-//	for {
-		netConn, err := l.Accept()
-		if err != nil {
-			t.Fatal(err)
-		}
-		
+	str := strings.Join(ss, "\n")
+						
+	C2S(t, "127.0.0.1:0", func(t *testing.T, netConn net.Conn){
 		c := &conn{
 			server: &Server{
-				ReadTimeout: time.Second*1,
-				WriteTimeout: time.Second*1,
+				ReadTimeout: time.Second*3,
+				WriteTimeout: 0,
 			},
 			rwc: netConn,
 		}
-		c.r 	= &connReader{conn:c}
-		c.bufr 	= newBufioReader(c.r)
-		c.bufw 	= newBufioWriterSize(connWriter{conn:c}, 4<<10)
 		
-		ctx, cancelCtx := context.WithCancel(context.Background())
-		c.cancelCtx = cancelCtx
+		c.vc	= vconn.NewConn(c.rwc).(*vconn.Conn)
+  		c.vc.DisableBackgroundRead(true)
+		c.bufr 	= newBufioReader(c.vc)
+		c.bufw 	= newBufioWriterSize(c.vc, 4<<10)
+		c.ctx, c.cancelCtx = context.WithCancel(context.Background())
+		defer c.cancelCtx()
 		
-		lb, err := c.readLineBytes()
-		if err != nil {
-			t.Fatal(err)
+		var index int
+		for {
+			lb, err := c.readLineBytes()
+			if err != nil {
+				if isCommonNetReadError(err) {
+					break
+				}
+				t.Fatalf("%d, error(%v)", index, err)
+			}
+			if !bytes.Equal(lb, []byte(ss[index])) {
+				t.Fatalf("%d, 错误，读取数据不一样", index)
+			}
+			index++
+			
+			req, err := c.readRequest(c.ctx, lb)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if req.nonce != fmt.Sprintf("%d", index){
+				t.Fatalf("预测为 1，结果为 %v", req.nonce)
+			}
 		}
-		br := bytes.NewReader(lb)
-		req, err := c.readRequest(ctx, br)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if req.nonce != "1" {
-			t.Fatalf("预测为 1，结果为 %v", req.nonce)
-		}
-		
-		ctx, cancelCtx = context.WithCancel(context.Background())
-		c.cancelCtx = cancelCtx
-		lb, err = c.readLineBytes()
-		if err != nil {
-			t.Fatal(err)
-		}
-		br = bytes.NewReader(lb)
-		req, err = c.readRequest(ctx, br)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if req.nonce != "2" {
-			t.Fatalf("预测为 1，结果为 %v", req.nonce)
-		}
-		
-		ctx, cancelCtx = context.WithCancel(context.Background())
-		c.cancelCtx = cancelCtx
-		lb, err = c.readLineBytes()
-		if err == nil {
-			t.Fatal("没有数据，应该是io.EOF")
-		}
-		br = bytes.NewReader(lb)
-		req, err = c.readRequest(ctx, br)
-		if err == nil {
-			t.Fatal("没有数据，应该格式发生错误")
-		}
-		
 		c.Close()
+	}, func(t *testing.T, netConn net.Conn){
+		_, err := netConn.Write([]byte(str))
+		if err != nil {
+			t.Fatal(err)
+		}
 		netConn.Close()
-//	}
-	time.Sleep(time.Second*5)
-
+	})
 }
 
 func Test_conn_serve1(t *testing.T){
-
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	ss := []string{
+		`{"nonce": "1", "proto":"IOT/1.1", "method":"POST", "header":{"Connection":"keep-alive", "a":"h1"}, "host":"1.com", "path":"/a"}`,
+		`{"nonce": "2", "proto":"IOT/1.0", "method":"GET", "header":{"Connection":"keep-alive", "a":"h2"}, "host":"2.com", "path":"/b"}`,
 	}
-	defer l.Close()
+	str := strings.Join(ss, "\n")
 	
-	go func(){
-		time.Sleep(time.Second)
-		laddr := l.Addr().String()
-		s := `{"nonce": "1", "proto":"IOT/1.1", "method":"POST", "header":{"Connection":"keep-alive"}, "home":"a.com", "path":"/a"}
-			{"nonce": "2", "proto":"IOT/1.0", "method":"GET", "header":{"Connection":"keep-alive"}, "home":"b.com", "path":"/b"}`
-		b := []byte(s)
-		netConn, err := net.Dial("tcp", laddr)
-		n, err := netConn.Write(b)
-		if err != nil {
-			t.Fatalf("写入错误：%v",err)
-		}
-		if n != len(b) {
-			t.Fatalf("预测 %v, 发送 %v", len(b), n)
-		}
-		time.Sleep(time.Second)
-		var riot ResponseConfig
-		err = json.NewDecoder(netConn).Decode(&riot)
-		if err != nil {
-			t.Fatalf("读取错误：%v",err)
-		}
-		if riot.Status != 200 {
-			t.Fatalf("返回状态是：%d", riot.Status)
-		}
-		netConn.Close()
-	}()
-	
-//	for {
-		netConn, err := l.Accept()
-		if err != nil {
-			t.Fatal(err)
-		}
-		
+	C2S(t, "127.0.0.1:0", func(t *testing.T, netConn net.Conn){
 		c := &conn{
 			server: &Server{
-				ReadTimeout: 0,
+				ReadTimeout: time.Second*3,
 				WriteTimeout: 0,
 			},
 			rwc: netConn,
 		}
 		c.server.SetKeepAlivesEnabled(true)
 		var index int = 1
-		c.server.Handler=HandlerFunc(func(w ResponseWriter, r *Request){
-			if r.nonce != strconv.Itoa(index) {
-				t.Fatalf("预测 %v，错误 %v", index, r.nonce)
+		c.server.Handler=HandlerFunc(func(w ResponseWriter, vc *Request){
+			if vc.nonce != fmt.Sprintf("%d", index) {
+				t.Fatalf("预测 %v，错误 %v", index, vc.nonce)
 			}
-			index++
-				
+			
+			if vc.Host != fmt.Sprintf("%d.com", index) {
+				t.Fatalf("预测 %d.com，错误 %v", index, vc.Host)
+			}
+			
 			w.Status(200)
 			w.Header().Set("a","a1")
+			w.SetBody(index)
 			
 			res := w.(*responseWrite)
 			if res.status != 200 {
@@ -252,49 +198,91 @@ func Test_conn_serve1(t *testing.T){
 			if res.handlerDone.isTrue() {
 				t.Fatal("错误 handlerDone 是 true")
 			}
-		
+			
+			index++
 		})
 		c.serve(context.Background())
+	}, func(t *testing.T, netConn net.Conn){
 		
+		b := []byte(str)
+		n, err := netConn.Write(b)
+		if err != nil {	
+			t.Fatalf("写入错误：%v",err)	
+		}	
+		if n != len(b) {	
+			t.Fatalf("预测 %v, 发送 %v", len(b), n)
+		}
+		time.Sleep(time.Second)
 		
-	//	t.Log(c)
-//	}
-	time.Sleep(time.Second*5)
-
+		for i:=1; i<len(ss)+1; i++ {
+			var riot ResponseConfig
+			err = json.NewDecoder(netConn).Decode(&riot)
+			if err != nil {
+				t.Fatalf("读取错误：%v",err)
+			}
+			if riot.Status != 200 {
+				t.Fatalf("返回状态是：%d", riot.Status)
+			}
+			if riot.Body.(float64) != float64(i) {
+				t.Fatalf("返回内容是：%v，预期是：%d", riot.Body, i)
+			}
+		}
+		netConn.Close()
+	})
 }
 
 func Test_conn_serve2(t *testing.T){
 
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-	
-	go func(t *testing.T){
-		time.Sleep(time.Second)
-		laddr := l.Addr().String()
-		netConn, err := net.Dial("tcp", laddr)
-		if err != nil {
-			t.Fatal(err)
+	C2S(t, "127.0.0.1:0", func(t *testing.T, netConn net.Conn){
+		c := &conn{
+			server: &Server{
+				ReadTimeout: time.Second*3,
+				WriteTimeout: 0,
+			},
+			rwc: netConn,
+		}
+		c.server.SetKeepAlivesEnabled(true)
+		
+		var iotRes = make(map[string]RoundTripper) //map[ip]launcher
+		var iotLaunch = func(ipAddr string, vc *Request){
+			//给一秒让服务返回信息到客户端
+			time.Sleep(time.Second)
+			res, err := iotRes[ipAddr].RoundTripContext(context.Background(), vc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Status != 200 {
+				t.Fatal("错误")
+			}
 		}
 		
-		//->
+		c.server.Handler=HandlerFunc(func(w ResponseWriter, vc *Request){
+			if _, ok := iotRes[vc.RemoteAddr]; !ok {
+				launch := w.(Launcher).Launch()
+				iotRes[vc.RemoteAddr] = launch
+				go iotLaunch(vc.RemoteAddr, vc)
+			}
+		})
+		c.serve(context.Background())
+	}, func(t *testing.T, netConn net.Conn){
 		var riotb = requestConfigBody{
-			RequestConfig: &RequestConfig{Nonce:"1",
+			RequestConfig: &RequestConfig{
+				Nonce:"1",
 				Proto:"IOT/1.1",
 				Method:"POST",
 				Header:Header{"Connection":"keep-alive"},
-				Home:"a.com",
-				Path:"/a"},
+				Host:"a.com",
+				Path:"/a",
+			},
 			Body:"123",
 		}
+		//------------------------------------------client to server
 		//请求
-		err = json.NewEncoder(netConn).Encode(&riotb)
+		err := json.NewEncoder(netConn).Encode(&riotb)
 		if err != nil {
 			t.Fatal(err)
 		}
-		//得到响应
+		//响应
 		var riot ResponseConfig
 		err = json.NewDecoder(netConn).Decode(&riot)
 		if err != nil {
@@ -303,80 +291,30 @@ func Test_conn_serve2(t *testing.T){
 		if riot.Status != 200 {
 			t.Fatal(riot)
 		}
-		//<-
 		
-		//->
-		//得到请求
+		//------------------------------------------server to client
+		//请求
 		var riotb1 requestConfigBody
 		err = json.NewDecoder(netConn).Decode(&riotb1)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if riotb.Home != riotb1.Home {
-			t.Fatalf("发 %s, 收 %s", riotb.Home, riotb1.Home)
+		if riotb.Host != riotb1.Host {
+			t.Fatalf("发 %s, 收 %s", riotb.Host, riotb1.Host)
 		}
-		//回复
+		//响应
 		riot.Nonce = riotb1.Nonce
 		err = json.NewEncoder(netConn).Encode(&riot)
 		if err != nil {
 			t.Fatal(err)
 		}
-	//	netConn.Write([]byte("\n"))
-		//<-
-		
-		//给5秒
-		//time.Sleep(time.Second*5)
+		//1秒后关闭
+		time.Sleep(time.Second)
 		netConn.Close()
-	}(t)
-	
-//	for {
-		netConn, err := l.Accept()
-		if err != nil {
-			t.Fatal(err)
-		}
-		
-		c := &conn{
-			server: &Server{
-				ReadTimeout: 0,
-				WriteTimeout: 0,
-			},
-			rwc: netConn,
-		}
-		c.server.SetKeepAlivesEnabled(true)
-		
-		var iotRes = make(map[string]RoundTripper) //map[ip]launcher
-		var iotLaunch = func(ipAddr string, r *Request){
-			//给一秒让服务返回信息到客户端
-			time.Sleep(time.Second)
-			res, err := iotRes[ipAddr].RoundTripContext(context.Background(), r)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if res.Status != 200 {
-				t.Fatal("错误")
-			}
-		}
-		c.server.Handler=HandlerFunc(func(w ResponseWriter, r *Request){
-			if _, ok := iotRes[r.RemoteAddr]; !ok {
-				launch := w.(Launcher).Launch()
-				iotRes[r.RemoteAddr] = launch
-				go iotLaunch(r.RemoteAddr, r)
-			}
-		})
-		c.serve(context.Background())
-		
-		
-	//	t.Log(c)
-//	}
-	
-	time.Sleep(time.Second*5)
-
+	})
 }
 
-
 func Test_conn_setState(t *testing.T){
-	
-	
 	c := &conn{
 		server: &Server{
 			
@@ -399,11 +337,6 @@ func Test_conn_setState(t *testing.T){
 	if _, ok := c.server.activeConn[c]; ok {
 		t.Fatal("连接无法清除")
 	}
-	
-}
-
-func Test_conn_closeWriteAndWait(t *testing.T){
-	
 }
 
 func Test_conn_finalFlush(t *testing.T){
@@ -419,58 +352,5 @@ func Test_conn_finalFlush(t *testing.T){
 		t.Fatal("bufw 应该为nil")
 	}
 }
-
-
-func Test_conn_launchLocked(t *testing.T){
-	
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

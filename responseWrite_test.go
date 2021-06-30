@@ -83,7 +83,7 @@ func Test_response_SetBody(t *testing.T) {
 		req: &Request{
 		},
 	}
-	res.cw = chunkWriter{res:res}
+	res.dw = dataWriter{res:res}
 	res.SetBody([1]int{1})
 	err := res.done()
 	if err != nil {
@@ -119,7 +119,7 @@ func Test_response_done(t *testing.T) {
 		req: &Request{
 		},
 	}
-	res.cw = chunkWriter{res:res}
+	res.dw = dataWriter{res:res}
 	
 	if res.handlerDone.isTrue() {
 		t.Fatalf("错误：handlerDone 是 true")

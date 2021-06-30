@@ -21,7 +21,6 @@ type Response struct{
 	Body		interface{}													// 主体
 	Close		bool														// 服务器关闭连接
 	Request		*Request													// 请求
-	RemoteAddr	string														// 远程IP
 	
 	nonce 		string														// 编码
 }

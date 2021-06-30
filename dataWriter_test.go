@@ -10,40 +10,8 @@ import(
 	"encoding/json"
 )
 
-func Test_chunkWriter_ctype(t *testing.T) {
-	var v1 int = 1
-	var v2 *int = &v1
-	var v3 interface{} = &v2
-	tests := []struct{
-		result 	string
-		v		interface{}
-		err		bool
-	}{
-		{result: "int", v: int(1)},
-		{result: "object", v: float64(1), err: true},
-		{result: "string", v: int(1), err: true},
-		{result: "string", v: string("1")},
-		{result: "string", v: (*string)(nil)},
-		{result: "int", v: (interface{})(v2)},
-		{result: "bool", v: (interface{})(true)},
-		{result: "invalid", v: (interface{})(nil)},
-		{result: "slice", v: []int{1}},
-		{result: "array", v: [1]int{1}},
-		{result: "map", v: map[int]int{1: 2}},
-		{result: "invalid", v: nil},
-		{result: "interface", v: (*interface{})(&v3)},
-	}
-	for index, test := range tests {
-		cw := chunkWriter{}
-		cw.ctype(test.v)
-		if test.err != (cw.ct != test.result) {
-			t.Fatalf("%d, 预测 %v, 错误 %v", index, test.result, cw.ct)
-		}
-	}
-}
 
-
-func Test_chunkWriter_generateResponse(t *testing.T) {
+func Test_dataWriter_generateResponse(t *testing.T) {
 	tests := []struct{
 		SetKeepAlivesEnabled bool
 		SetKeepAlivesEnabledString	string
@@ -66,7 +34,7 @@ func Test_chunkWriter_generateResponse(t *testing.T) {
 		{SetKeepAlivesEnabled:false, SetKeepAlivesEnabledString: "close", nonce:"2", ProtoMajor:1, ProtoMinor:1, closeAfterReply:true, header:Header{"Connection":"keep-alive"}},
 	}
 	for index, test := range tests {
-		cw := &chunkWriter{
+		cw := &dataWriter{
 			res: &responseWrite{
 				conn: &conn{
 					server: &Server{},
@@ -92,14 +60,15 @@ func Test_chunkWriter_generateResponse(t *testing.T) {
 			t.Fatalf("%v, 预测 %v, 错误 %v", index, test.closeAfterReply, cw.res.closeAfterReply)
 		}
 		if !reflect.DeepEqual(test.nonce, cw.data.Get("nonce")) {
-			t.Fatalf("%v, 预测 %v, 错误 %v", index, test.nonce, cw.data.Get("nonce"))		}
+			t.Fatalf("%v, 预测 %v, 错误 %v", index, test.nonce, cw.data.Get("nonce"))
+		}
 		//t.Log(cw.data)
 	}
 }
 
-func Test_chunkWriter_Body(t *testing.T) {
+func Test_dataWriter_Body(t *testing.T) {
 	bytesBuffer := bytes.NewBuffer(nil)
-	cw := &chunkWriter{
+	cw := &dataWriter{
 		res: &responseWrite{
 			conn: &conn{
 				server	: &Server{},
@@ -135,9 +104,9 @@ func Test_chunkWriter_Body(t *testing.T) {
 	}
 }
 
-func Test_chunkWriter_done(t *testing.T) {
+func Test_dataWriter_done(t *testing.T) {
 	bytesBuffer := bytes.NewBuffer(nil)
-	cw := &chunkWriter{
+	cw := &dataWriter{
 		res: &responseWrite{
 			conn: &conn{
 				server	: &Server{},

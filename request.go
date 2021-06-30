@@ -8,8 +8,13 @@ import(
 	"encoding/json"
 	"strings"
 	"fmt"
+	"github.com/456vv/vweb/v2/builtin"
 )
 
+type pastRequestConfig struct{
+	*RequestConfig
+	Home	string				`json:"home,omitempty"`
+}
 //iot接收或发送数据格式带BODY
 type requestConfigBody struct{
 	*RequestConfig
@@ -22,7 +27,7 @@ type RequestConfig struct{
 	Proto 	string				`json:"proto"`
 	Method 	string				`json:"method"`
 	Path 	string				`json:"path"`
-	Home	string				`json:"home"`
+	Host	string				`json:"host"`
 	Header 	Header				`json:"header"`
 	body 	interface{}
 }
@@ -70,7 +75,7 @@ type reqBody struct{
 
 type Request struct {
 	nonce 		string														// 编号
-	Home		string														// 身份
+	Host		string														// 身份
 	Method		string														// 方法
 	RequestURI	string														// 请求URL
 	URL 		*url.URL													// 路径
@@ -84,7 +89,6 @@ type Request struct {
 	
 	bodyw		interface{}													// 写入的Body数据
 	datab		*bytes.Buffer												// 请求的数据(缓存让GetBody调用)
-	getbodyed	bool														// 判断读取主体
 	ctx			context.Context												// 上下文
   	cancelCtx   context.CancelFunc											// 上下文函数
 
@@ -99,20 +103,21 @@ func (T *Request) GetNonce() string {
 //	i interface{}	数据写入这里
 //	error			错误
 func (T *Request) GetBody(i interface{}) error {
-	if T.getbodyed {
-		return ErrGetBodyed
+	//这是开发者自行创建的Request，设置SetBody后可以调用GetBody读出
+	if T.bodyw != nil {
+		builtin.GoTypeTo(i)(T.bodyw)
+		return nil
 	}
-	T.getbodyed = true
 	
 	//非 POST 提交，不支持提取BODY数据
 	if T.datab == nil {
-		return ErrBodyNotAllowed
+		return ErrGetBodyed
 	}
 	
 	err := json.NewDecoder(T.datab).Decode(&reqBody{i})
 	if err == nil {
 		T.datab = nil
-	}	
+	}
 	return err
 }
 
@@ -207,18 +212,18 @@ func (T *Request) SetTokenAuth(token string) {
 //	err error			错误
 func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
 
-	home := T.Home
+	host := T.Host
 	path := T.RequestURI
 	if T.URL != nil {
-		if home == "" {
-			home = T.URL.Host
+		if host == "" {
+			host = T.URL.Host
 		}
 		if path == "" {
 			path = T.URL.RequestURI()
 		}
 	}
-	if home == "" {
-		return nil, ErrHomeInvalid
+	if host == "" {
+		return nil, ErrHostInvalid
 	}
 	if path == "" {
 		return nil, ErrURIInvalid
@@ -241,7 +246,7 @@ func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
 		Proto	: proto,
 		Method	: T.Method,
 		Path	: path,
-		Home	: home,
+		Host	: host,
 		Header	: T.Header.Clone(),
 	}
 	
@@ -256,13 +261,3 @@ func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
 	riot.SetBody(&T.bodyw)
 	return riot, nil
 }
-
-
-
-
-
-
-
-
-
-
