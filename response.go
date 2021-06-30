@@ -33,7 +33,7 @@ func (T *Response) SetNonce(n string) {
 
 //写入到
 //	w ResponseWriter	T响应写w
-func (T *Response) WriteTo(w ResponseWriter) {
+func (T *Response) WriteAt(w ResponseWriter) {
 	w.Status(T.Status)
 	h := w.Header()
 	for k, v := range T.Header {
@@ -44,7 +44,7 @@ func (T *Response) WriteTo(w ResponseWriter) {
 
 //写入w
 //	w io.Writer		T响应写w
-func (T *Response) Write(w io.Writer) error {
+func (T *Response) WriteTo(w io.Writer) error {
 	ir := &ResponseConfig{
 		Nonce	: T.nonce,
 		Status	: T.Status,

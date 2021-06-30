@@ -117,8 +117,8 @@ type Response struct{                                                   // 响�
     RemoteAddr string                                                       // 远程IP
 }
     func (T *Response) SetNonce(n string)                                   // 设置编号
-    func (T *Response) WriteTo(w ResponseWriter)                            // 写入到
-    func (T *Response) Write(w io.Writer) error                             // 写入w
+    func (T *Response) WriteAt(w ResponseWriter)                            // 写入到
+    func (T *Response) WriteTo(w io.Writer) error                           // 写入w
     func (T *Response) ResponseConfig(nonce string) (riot *ResponseConfig, err error)// 响应，接收设备的响应
 type ResponseWriter interface {                                         // 响应写入接口
     Header() Header                                                         // 标头

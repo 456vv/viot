@@ -27,14 +27,14 @@ func (T *respw) SetBody(i interface{}) error {
 }
 
 
-func Test_Response_WriteTo(t *testing.T){
+func Test_Response_WriteAt(t *testing.T){
 	resp := &Response{
 	    Status	:200,
 		Header	:Header{"a":"b"},
 		Body	:123,
 	}
 	w := &respw{}
-	resp.WriteTo(w)
+	resp.WriteAt(w)
 	
 	if w.code != resp.Status {
 		t.Fatalf("错误，预计 %d， 结果 %d", resp.Status, w.code)
@@ -48,7 +48,7 @@ func Test_Response_WriteTo(t *testing.T){
 }
 
 
-func Test_Response_Write(t *testing.T){
+func Test_Response_WriteTo(t *testing.T){
 	resp := &Response{
 		nonce	:"123",
 	    Status	:200,
@@ -56,7 +56,7 @@ func Test_Response_Write(t *testing.T){
 		Body	:float64(123),
 	}
 	w := bytes.NewBuffer(nil)
-	if err := resp.Write(w); err != nil {
+	if err := resp.WriteTo(w); err != nil {
 		t.Fatal(err)
 	}
 	var ir ResponseConfig
