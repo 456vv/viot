@@ -8,6 +8,9 @@ import(
 	"encoding/json"
 	"strings"
 	"fmt"
+	"errors"
+	"io"
+	"github.com/456vv/vmap/v2"
 	"github.com/456vv/vweb/v2/builtin"
 )
 
@@ -93,6 +96,84 @@ type Request struct {
   	cancelCtx   context.CancelFunc											// 上下文函数
 
 }
+
+//新的请求
+//	method, url string		方法，地址(viot://host/path)
+//	body interface{}		数据
+//	*Request, error			请求，错误
+func NewRequest(method, url string, body interface{}) (*Request, error) {
+	return NewRequestWithContext(context.Background(), method, url, body)
+}
+//新的请求
+//	ctx context.Context		上下文
+//	method, urlStr string	方法，地址(viot://host/path)
+//	body interface{}		数据
+//	*Request, error			请求，错误
+func NewRequestWithContext(ctx context.Context, method, urlStr string, body interface{}) (*Request, error) {
+	if method == "" {
+		method = "GET"
+	}
+	if ctx == nil {
+		return nil, errors.New("viot: nil Context")
+	}
+	if !validMethod(method) {
+		return nil, fmt.Errorf("viot: invalid method %q", method)
+	}
+	
+	nonce, err := Nonce()
+	if err != nil {
+		return nil, err
+	}
+	
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
+	
+	
+	if body != nil {
+		switch v := body.(type) {
+		case *bytes.Buffer:
+			body = json.RawMessage(v.Bytes())
+		case *bytes.Reader:
+			b, err := io.ReadAll(v)
+			if err != nil {
+				return nil, err
+			}
+			body = json.RawMessage(b)
+		case *strings.Reader:
+			b, err := io.ReadAll(v)
+			if err != nil {
+				return nil, err
+			}
+			body = json.RawMessage(b)
+		case *vmap.Map:
+			b, err := v.MarshalJSON()
+			if err != nil {
+				return nil, err
+			}
+			body = json.RawMessage(b)
+		case []byte:
+			body = json.RawMessage(v)
+		default:
+		}
+	}
+	u.Host = removeEmptyPort(u.Host)
+	req := &Request{
+		nonce:		nonce,
+		Method: 	method,
+		Host: 		u.Host,
+		URL: 		u,
+		Proto:		"IOT/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Header:		make(Header),
+		bodyw:		body,
+	}
+	req.ctx, req.cancelCtx = context.WithCancel(ctx)
+	return req, nil
+}
+
 //读取编号
 //	string	请求编号
 func (T *Request) GetNonce() string {

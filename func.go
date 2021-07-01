@@ -461,3 +461,14 @@ func delay(wait, maxDelay time.Duration) time.Duration {
 	time.Sleep(wait)
     return wait
 }
+
+//给定"host", "host:port"或"[IPv6::address]:port",如果字符串包含端口,则返回true｡
+func hasPort(s string) bool { return strings.LastIndex(s, ":") > strings.LastIndex(s, "]") }
+
+//将":port" 到 "" 以"rfc 3986"第6.2.3节第6.2.3节中的空端口｡
+func removeEmptyPort(host string) string {
+	if hasPort(host) {
+		return strings.TrimSuffix(host, ":")
+	}
+	return host
+}

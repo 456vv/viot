@@ -15,33 +15,33 @@ import(
 	"github.com/456vv/vconn"
 )
 
-func C2S(t *testing.T, addr string, server func(t *testing.T, c net.Conn), client func(t *testing.T, c net.Conn)){
+func C2S(addr string, server func(c net.Conn), client func(c net.Conn)){
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	defer l.Close()
 	
-	go func(t *testing.T){
+	go func(){
 		laddr := l.Addr().String()
 		netConn, err := net.Dial("tcp", laddr)
 		if err != nil {
-			t.Fatal(err)
+			panic(err)
 		}
-		client(t, netConn)
+		client(netConn)
 		netConn.Close()
 		l.Close()
-	}(t)
+	}()
 	
 	for {
 		netConn, err := l.Accept()
 		if err != nil {
 			if !strings.Contains(err.Error(), "use of closed network connection") {
-				t.Fatal(err)
+				panic(err)
 			}
 			return
 		}
-		server(t, netConn)
+		server(netConn)
 	}
 }
 
@@ -52,7 +52,7 @@ func Test_conn_readLineBytes(t *testing.T){
 	}
 	str := strings.Join(ss, "\n")
 
-	C2S(t, "127.0.0.1:0", func(t *testing.T, netConn net.Conn){
+	C2S("127.0.0.1:0", func(netConn net.Conn){
 		c := &conn{
 			server: &Server{
 				ReadTimeout: time.Second,
@@ -84,7 +84,7 @@ func Test_conn_readLineBytes(t *testing.T){
 		}
 		
 		c.Close()
-	}, func(t *testing.T,  netConn net.Conn){
+	}, func(netConn net.Conn){
 		
 		b := []byte(str)
 		n, err := netConn.Write(b)
@@ -107,7 +107,7 @@ func Test_conn_readRequest(t *testing.T){
 	}
 	str := strings.Join(ss, "\n")
 						
-	C2S(t, "127.0.0.1:0", func(t *testing.T, netConn net.Conn){
+	C2S("127.0.0.1:0", func(netConn net.Conn){
 		c := &conn{
 			server: &Server{
 				ReadTimeout: time.Second*3,
@@ -146,7 +146,7 @@ func Test_conn_readRequest(t *testing.T){
 			}
 		}
 		c.Close()
-	}, func(t *testing.T, netConn net.Conn){
+	}, func(netConn net.Conn){
 		_, err := netConn.Write([]byte(str))
 		if err != nil {
 			t.Fatal(err)
@@ -162,7 +162,7 @@ func Test_conn_serve1(t *testing.T){
 	}
 	str := strings.Join(ss, "\n")
 	
-	C2S(t, "127.0.0.1:0", func(t *testing.T, netConn net.Conn){
+	C2S("127.0.0.1:0", func(netConn net.Conn){
 		c := &conn{
 			server: &Server{
 				ReadTimeout: time.Second*3,
@@ -202,7 +202,7 @@ func Test_conn_serve1(t *testing.T){
 			index++
 		})
 		c.serve(context.Background())
-	}, func(t *testing.T, netConn net.Conn){
+	}, func(netConn net.Conn){
 		
 		b := []byte(str)
 		n, err := netConn.Write(b)
@@ -233,7 +233,7 @@ func Test_conn_serve1(t *testing.T){
 
 func Test_conn_serve2(t *testing.T){
 
-	C2S(t, "127.0.0.1:0", func(t *testing.T, netConn net.Conn){
+	C2S("127.0.0.1:0", func(netConn net.Conn){
 		c := &conn{
 			server: &Server{
 				ReadTimeout: time.Second*3,
@@ -264,7 +264,7 @@ func Test_conn_serve2(t *testing.T){
 			}
 		})
 		c.serve(context.Background())
-	}, func(t *testing.T, netConn net.Conn){
+	}, func(netConn net.Conn){
 		var riotb = requestConfigBody{
 			RequestConfig: &RequestConfig{
 				Nonce:"1",

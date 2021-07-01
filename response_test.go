@@ -56,7 +56,7 @@ func Test_Response_WriteTo(t *testing.T){
 		Body	:float64(123),
 	}
 	w := bytes.NewBuffer(nil)
-	if err := resp.WriteTo(w); err != nil {
+	if _, err := resp.WriteTo(w); err != nil {
 		t.Fatal(err)
 	}
 	var ir ResponseConfig

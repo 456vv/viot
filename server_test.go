@@ -8,25 +8,25 @@ import(
 	"reflect"
 )
 
-func C2L(t *testing.T, addr string, server func(t *testing.T, l net.Listener), client func(t *testing.T, c net.Conn)){
+func C2L(addr string, server func(l net.Listener), client func(c net.Conn)){
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	defer l.Close()
 	
-	go func(t *testing.T){
+	go func(){
 		laddr := l.Addr().String()
 		netConn, err := net.Dial("tcp", laddr)
 		if err != nil {
-			t.Fatal(err)
+			panic(err)
 		}
-		client(t, netConn)
+		client(netConn)
 		netConn.Close()
 		l.Close()
-	}(t)
+	}()
 	
-	server(t, l)
+	server(l)
 }
 
 func Test_server_trackListener(t *testing.T){
@@ -70,7 +70,7 @@ func Test_server_trackConn(t *testing.T){
 
 func Test_server_Serve(t *testing.T){
 	
-	C2L(t, "127.0.0.1:0", func(t *testing.T, l net.Listener){
+	C2L("127.0.0.1:0", func(l net.Listener){
 		s := &Server{}
 		s.Handler=HandlerFunc(func(rw ResponseWriter, r *Request){
 			if r.Method == "POST" {
@@ -84,7 +84,7 @@ func Test_server_Serve(t *testing.T){
 			}
 		})
 		s.Serve(l)
-	}, func(t *testing.T, c net.Conn){
+	}, func(c net.Conn){
 		tests := []struct{
 			status int
 			sand string
