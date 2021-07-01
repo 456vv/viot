@@ -51,7 +51,7 @@ func Test_dataWriter_generateResponse(t *testing.T) {
 		cw.generateResponse()
 		
 		if test.SetKeepAlivesEnabled {
-			conn := cw.data.Index("header","Connection").(string)
+			conn := cw.data.Header.Get("Connection")
 			if conn != test.SetKeepAlivesEnabledString {
 				t.Fatalf("%v, 预测 %v, 错误 %v", index, test.SetKeepAlivesEnabledString, conn)
 			}
@@ -59,8 +59,8 @@ func Test_dataWriter_generateResponse(t *testing.T) {
 		if test.closeAfterReply != cw.res.closeAfterReply {
 			t.Fatalf("%v, 预测 %v, 错误 %v", index, test.closeAfterReply, cw.res.closeAfterReply)
 		}
-		if !reflect.DeepEqual(test.nonce, cw.data.Get("nonce")) {
-			t.Fatalf("%v, 预测 %v, 错误 %v", index, test.nonce, cw.data.Get("nonce"))
+		if !reflect.DeepEqual(test.nonce, cw.data.Nonce) {
+			t.Fatalf("%v, 预测 %v, 错误 %v", index, test.nonce, cw.data.Nonce)
 		}
 		//t.Log(cw.data)
 	}
