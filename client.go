@@ -4,7 +4,6 @@ import(
 	"github.com/456vv/vconnpool/v2"
 	"time"
 	"context"
-	"net/url"
 	"net"
 )
 
@@ -34,22 +33,12 @@ func (T *Client) Get(url string, header Header) (resp *Response, err error) {
 //	resp *Response			响应
 //	err error				错误
 func (T *Client) GetCtx(ctx context.Context, urlstr string, header Header) (resp *Response, err error) {
-	u, err := url.Parse(urlstr)
+	req, err := NewRequestWithContext(ctx, "GET", urlstr, nil)
 	if err != nil {
 		return nil, err
 	}
-	
-	if header == nil {
-		header = make(Header)
-	}
-	
-	//构建请求
-	req := &Request{
-		Proto		: "IOT/1.1",
-		Method		: "GET",
-		RequestURI	: u.RequestURI(),
-		Host		: u.Host,
-		Header		: header.Clone(),
+	if header != nil {
+		req.Header = header.Clone()
 	}
 	return T.DoCtx(ctx, req)
 }
@@ -82,16 +71,22 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 	if req.Host == "" {
 		req.Host = T.Host
 	}
-	//生成编号
-	nonce, err := Nonce()
-	if err != nil {
-		return nil, err
+	
+	nonce := req.GetNonce()
+	if nonce == "" {
+		//生成编号 
+		nonce, err = Nonce()
+		if err != nil {
+			return nil, err
+		}
 	}
+	
 	//导出IOT支持的格式
 	riot, err := req.RequestConfig(nonce)
 	if err != nil {
 		return nil, err
 	}
+	
 	//转字节串
 	rbody, err := riot.Marshal()
 	if err != nil {
@@ -110,6 +105,14 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 	netConn, err := T.Dialer.DialContext(ctx, tcpAddr.Network(), tcpAddr.String())
 	if err != nil {
 		return nil, err
+	}
+	
+	//关闭连接，不回收到池中
+	if req.wantsClose() || req.Close {
+		cp, ok := netConn.(vconnpool.Conn)
+		if ok {
+			cp.Discard()
+		}
 	}
 	defer netConn.Close()
 	go func(){
@@ -162,24 +165,13 @@ func (T *Client) Post(url string, header Header, body interface{}) (resp *Respon
 //	resp *Response			响应
 //	err error				错误
 func (T *Client) PostCtx(ctx context.Context, urlstr string, header Header, body interface{}) (resp *Response, err error) {
-	u, err := url.Parse(urlstr)
+	req, err := NewRequestWithContext(ctx, "POST", urlstr, body)
 	if err != nil {
 		return nil, err
 	}
-	
-	if header == nil {
-		header = make(Header)
+	if header != nil {
+		req.Header = header.Clone()
 	}
-	
-	//构建请求
-	req := &Request{
-		Proto		: "IOT/1.1",
-		Method		: "POST",
-		RequestURI	: u.RequestURI(),
-		Host		: u.Host,
-		Header		: header.Clone(),
-	}
-	req.SetBody(body)
 	return T.DoCtx(ctx, req)
 }
 

@@ -164,6 +164,7 @@ func NewRequestWithContext(ctx context.Context, method, urlStr string, body inte
 		Method: 	method,
 		Host: 		u.Host,
 		URL: 		u,
+		RequestURI	: u.RequestURI(),
 		Proto:		"IOT/1.1",
 		ProtoMajor: 1,
 		ProtoMinor: 1,
