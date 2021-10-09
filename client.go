@@ -102,6 +102,9 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 	if err != nil {
 		return nil, err
 	}
+	if T.Dialer == nil {
+		T.Dialer = new(net.Dialer)
+	}
 	netConn, err := T.Dialer.DialContext(ctx, tcpAddr.Network(), tcpAddr.String())
 	if err != nil {
 		return nil, err
