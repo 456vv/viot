@@ -46,9 +46,6 @@ var reqFeature2 = []string{"\"nonce\"","\"proto\"","\"method\"","\"path\"","\"ho
 //响应特征
 var respFeature1 = []string{"\"nonce\"","\"status\""}
 
-//内部模板函数
-var TemplateFunc = vweb.TemplateFunc
-
 type Session = vweb.Session
 type Sessions = vweb.Sessions
 type Globaler = vweb.Globaler
