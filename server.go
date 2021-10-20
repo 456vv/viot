@@ -323,11 +323,11 @@ func (T *Server) logf(level LogLevel, format string, v ...interface{}) {
     	log.Print(txt)
     }
 }
-func (T *Server) logDebugWriteData(addr string, b interface{}){
-	T.logf(LogDebug, "viot: 往IP(%s)写入数据:\n% x\n%s", addr, b, b)
-}
 func (T *Server) logDebugReadData(addr string, b interface{}){
-	T.logf(LogDebug, "viot: 从IP(%s)读取数据:\n% x\n%s", addr, b, b)
+	T.logf(LogDebug, "viot: 从IP(%s)读取数据:\n%s", addr, b)
+}
+func (T *Server) logDebugWriteData(addr string, b interface{}){
+	T.logf(LogDebug, "viot: 往IP(%s)写入数据:\n%s", addr, b)
 }
 
 //判断服务器是否支持长连接

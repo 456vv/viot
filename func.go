@@ -142,11 +142,11 @@ func readRequest(b io.Reader) (req *Request, err error) {
   	}()
   	
   	req = new(Request)
-  	req.datab = new(bytes.Buffer)
+  	req.bodyr = new(bytes.Buffer)
 	//{json}
   	
 	var ij pastRequestConfig
-	err = json.NewDecoder( io.TeeReader(bufr, req.datab) ).Decode(&ij)
+	err = json.NewDecoder( io.TeeReader(bufr, req.bodyr) ).Decode(&ij)
 	if err != nil {
 		return nil, fmt.Errorf("Incorrect format of request content %v", err)
 	}
@@ -168,7 +168,7 @@ func readRequest(b io.Reader) (req *Request, err error) {
   	
   	//释放内存，仅POST提交才支持body
   	if ij.Method != "POST" {
-  		req.datab = nil
+  		req.bodyr = nil
   	}
   	
 	req.Header		= ij.Header.Clone()

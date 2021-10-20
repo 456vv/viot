@@ -63,7 +63,7 @@ func (T *ResponseWrite) Result() *viot.Response {
 }
 
 func (T *ResponseWrite) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	vc := vconn.NewConn(T.conn).(*vconn.Conn)
+	vc := vconn.NewConn(T.conn)
 	return vc, bufio.NewReadWriter(bufio.NewReader(vc), bufio.NewWriter(T.conn)), nil
 }
 
