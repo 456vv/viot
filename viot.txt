@@ -91,6 +91,8 @@ type Request struct {                                               // 请求
     RemoteAddr string                                                       // 远程IP地址
     Close       bool                                                        // 客户要求一次性连接
 }
+	func NewRequest(method, url string, body interface{}) (*Request, error)												// 创建请求
+	func NewRequestWithContext(ctx context.Context, method, urlStr string, body interface{}) (*Request, error)			// 创建请求（上下文）
     func (T *Request) GetNonce() string                                     // 读取编号
     func (T *Request) GetBody(i interface{}) error                          // 读取主体
     func (T *Request) SetBody(i interface{}) error                          // 设置主体
@@ -99,7 +101,7 @@ type Request struct {                                               // 请求
     func (T *Request) WithContext(ctx context.Context) *Request             // 替换上下文
     func (T *Request) GetBasicAuth() (username, password string, ok bool)   // 基本验证
     func (T *Request) SetBasicAuth(username, password string)               // 设置基本验证
-    func (T *Request) GetTokenAuth() (token string, ok bool)                // token验证
+    func (T *Request) GetTokenAuth() string                					// token验证
     func (T *Request) SetTokenAuth(token string)                            // 设置token验证
     func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error)// 请求，发往设备的请求
 type ResponseConfig struct{

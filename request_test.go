@@ -99,18 +99,17 @@ func Test_request_GetTokenAuth(t *testing.T) {
 	tests := []struct{
 		tokenAuth string
 		token string
-		ok bool
 	}{
-		{tokenAuth:"token 123456790", token:"123456790", ok: true},
-		{tokenAuth:"Token 123456790", token:"123456790", ok: false},
-		{tokenAuth:"Basic abc", token:"abc", ok: false},
+		{tokenAuth:"token 123456790", token:"123456790"},
+		{tokenAuth:"Token 123456790", token:""},
+		{tokenAuth:"Basic abc", token:""},
 	}
 	for index, test := range tests {
 		req := &Request{
 			Header:Header{"Authorization":test.tokenAuth},
 		}
-		if token, ok := req.GetTokenAuth(); test.token != token  && ok != test.ok {
-			t.Fatalf("%d，预测（token: %v, ok: %v），结果（token: %v,  ok: %v）", index, test.token, test.ok, token, ok)
+		if token := req.GetTokenAuth(); test.token != token {
+			t.Fatalf("%d，预测（token: %v），结果（token: %v）", index, test.token, token)
 		}
 	}
 
@@ -119,19 +118,18 @@ func Test_request_SetTokenAuth(t *testing.T) {
 	tests := []struct{
 		tokenAuth string
 		token string
-		ok bool
 	}{
-		{tokenAuth:"token 123456790", token:"123456790", ok: true},
-		{tokenAuth:"Token 123456790", token:"123456790", ok: false},
-		{tokenAuth:"Basic abc", token:"abc", ok: false},
+		{tokenAuth:"token 123456790", token:"123456790"},
+		{tokenAuth:"Token 123456790", token:"123456790"},
+		{tokenAuth:"Basic abc", token:"abc"},
 	}
 	for index, test := range tests {
 		req := &Request{
 			Header:make(Header),
 		}
 		req.SetTokenAuth(test.token)
-		if token, ok := req.GetTokenAuth(); test.token != token  && ok != test.ok {
-			t.Fatalf("%d，预测（token: %v, ok: %v），结果（token: %v,  ok: %v）", index, test.token, test.ok, token, ok)
+		if token := req.GetTokenAuth(); test.token != token {
+			t.Fatalf("%d，预测（token: %v），结果（token: %v）", index, test.token, token)
 		}
 	}
 

@@ -44,7 +44,7 @@ type ServerHandlerDynamic struct {
 //	rw ResponseWriter    响应
 //	req *Request         请求
 func (T *ServerHandlerDynamic) ServeIOT(rw ResponseWriter, req *Request){
-
+	
 	if T.PagePath == "" {
 		T.PagePath = req.URL.Path
 	}

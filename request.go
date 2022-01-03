@@ -91,7 +91,7 @@ type Request struct {
 	Close 		bool														// 客户要求一次性连接
 	
 	bodyw		interface{}													// 写入的Body数据
-	datab		*bytes.Buffer												// 请求的数据(缓存让GetBody调用)
+	bodyr		*bytes.Buffer												// 请求的数据(缓存让GetBody调用)
 	ctx			context.Context												// 上下文
   	cancelCtx   context.CancelFunc											// 上下文函数
 
@@ -192,15 +192,15 @@ func (T *Request) GetBody(i interface{}) error {
 	}
 	
 	//非 POST 提交，不支持提取BODY数据
-	if T.datab == nil {
+	if T.bodyr == nil {
 		return ErrGetBodyed
 	}
 	
-	err := json.NewDecoder(T.datab).Decode(&reqBody{i})
-	if err == nil {
-		T.datab = nil
+	if err := json.NewDecoder(T.bodyr).Decode(&reqBody{i}); err != nil {
+		return err
 	}
-	return err
+	T.bodyr = nil
+	return nil
 }
 
 // 设置主体
@@ -269,17 +269,16 @@ func (T *Request) SetBasicAuth(username, password string) {
 
 //token验证
 //	token string	令牌
-//	ok bool			如果有令牌，返回true
-func (T *Request) GetTokenAuth() (token string, ok bool) {
+func (T *Request) GetTokenAuth() string {
   	auth := T.Header.Get("Authorization")
   	if auth == "" {
-  		return
+  		return auth
   	}
   	const prefix = "token "
   	if !strings.HasPrefix(auth, prefix) {
-  		return
+  		return ""
   	}
-  	return auth[len(prefix):], true
+  	return auth[len(prefix):]
 }
 
 //设置token验证
