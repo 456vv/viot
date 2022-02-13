@@ -5,6 +5,7 @@ import(
 	"time"
 	"context"
 	"net"
+	"net/textproto"
 )
 
 type Client struct{
@@ -13,6 +14,7 @@ type Client struct{
 	Addr				string				//服务器地址
 	WriteDeadline		time.Duration		//写入连接超时
 	ReadDeadline		time.Duration		//读取连接超时
+	pipe 				textproto.Pipeline
 }
 
 //快速读取
@@ -132,7 +134,11 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 			return nil, err
 		}
 	}
+
+	id := T.pipe.Next()
+	T.pipe.StartRequest(id)
 	_, err = netConn.Write(rbody)
+	T.pipe.EndRequest(id)
 	if err != nil {
 		return nil, err
 	}
@@ -144,6 +150,8 @@ func (T *Client) DoCtx(ctx context.Context, req *Request)(resp *Response, err er
 		}
 	}
 	
+	T.pipe.StartResponse(id)
+	defer T.pipe.EndResponse(id)
 	return ReadResponse(netConn, req)
 }
 
