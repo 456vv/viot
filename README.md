@@ -15,6 +15,11 @@ var (
     ErrDoned            = errors.New("Has been completed")
     ErrConnClose        = errors.New("Device connection is closed")
     ErrReqUnavailable   = errors.New("Request unavailable")
+
+	ErrHostInvalid   = errors.New("Host invalid")
+	ErrURIInvalid    = errors.New("URI invalid")
+	ErrProtoInvalid  = errors.New("Proto Invalid")
+	ErrMethodInvalid = errors.New("Method Invalid")
 )
 var (
     ServerContextKey = &contextKey{"iot-server"}                        // 服务器
@@ -27,7 +32,6 @@ type Globaler = vweb.Globaler                                           // 全�
 type Sessioner = vweb.Sessioner                                         // 会话接口
 type SiteMan = vweb.SiteMan                                             // 站点控制
 type Site = vweb.Site                                                   // 站点
-func ExtendTemplatePackage(pkgName string, deputy template.FuncMap)     // 扩展函数
 type Handler interface {                                        // 处理函数接口
     ServeIOT(ResponseWriter, *Request)                                  // 处理
 }
