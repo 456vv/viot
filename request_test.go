@@ -136,8 +136,16 @@ func Test_request_SetTokenAuth(t *testing.T) {
 }
 
 
-func Test_request_x(t *testing.T) {
-	
+func Test_request_GetBody(t *testing.T) {
+	req := &Request{
+		Header:make(Header),
+	}
+	req.SetBody(123)
+	var i interface{}
+	req.GetBody(&i)
+	if i != 123 {
+		t.Fatal("error")
+	}
 }
 
 
