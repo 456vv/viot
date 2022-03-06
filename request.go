@@ -187,7 +187,7 @@ func (T *Request) GetNonce() string {
 func (T *Request) GetBody(i interface{}) error {
 	//这是开发者自行创建的Request，设置SetBody后可以调用GetBody读出
 	if T.bodyw != nil {
-		builtin.GoTypeTo(i)(T.bodyw)
+		builtin.Convert(i, T.bodyw)
 		return nil
 	}
 	
