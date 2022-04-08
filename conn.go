@@ -17,8 +17,8 @@ import (
 	"golang.org/x/net/http/httpguts"
 )
 
-//initNPNRequest==================================================================================================================================
-//NPN请求
+// initNPNRequest==================================================================================================================================
+// NPN请求
 type initNPNRequest struct {
 	ctx context.Context // 上下文
 	srv *Server         // 上级
@@ -27,7 +27,7 @@ type initNPNRequest struct {
 
 func (T initNPNRequest) BaseContext() context.Context { return T.ctx }
 
-//服务接口
+// 服务接口
 func (T initNPNRequest) ServeIOT(rw ResponseWriter, req *Request) {
 	if req.TLS == nil {
 		req.TLS = &tls.ConnectionState{}
@@ -41,7 +41,7 @@ func (T initNPNRequest) ServeIOT(rw ResponseWriter, req *Request) {
 	}
 }
 
-//连接
+// 连接
 type conn struct {
 	server     *Server                   // 上级，服务器
 	rwc        net.Conn                  // 上级，原始连接
@@ -65,7 +65,7 @@ func (T *conn) RawControl(f func(net.Conn, *bufio.Reader) error) error {
 		return ErrConnClose
 	}
 
-	//判断劫持
+	// 判断劫持
 	if T.hijackedv.isTrue() {
 		return ErrHijacked
 	}
@@ -74,7 +74,7 @@ func (T *conn) RawControl(f func(net.Conn, *bufio.Reader) error) error {
 	return nil
 }
 
-//劫持连接
+// 劫持连接
 func (T *conn) hijackLocked() (vc net.Conn, buf *bufio.ReadWriter, err error) {
 	T.mu.Lock()
 	defer T.mu.Unlock()
@@ -83,32 +83,32 @@ func (T *conn) hijackLocked() (vc net.Conn, buf *bufio.ReadWriter, err error) {
 		return nil, nil, ErrConnClose
 	}
 
-	//判断是否有主动请求
+	// 判断是否有主动请求
 	if T.inLaunch() {
 		return nil, nil, ErrLaunched
 	}
 
-	//判断劫持
+	// 判断劫持
 	if T.hijackedv.isTrue() {
 		return nil, nil, ErrHijacked
 	}
 
-	//处理原始数据，防止冲突
+	// 处理原始数据，防止冲突
 	if T.handleFunc != nil {
 		return nil, nil, ErrRwaControl
 	}
-	//设置劫持
+	// 设置劫持
 	T.hijackedv.setTrue()
 
-	//支持后台读取，判断连接断开通知
+	// 支持后台读取，判断连接断开通知
 	T.vc.DisableBackgroundRead(false)
-	//退出空闲读取idleWait
+	// 退出空闲读取idleWait
 	T.vc.SetReadDeadline(aLongTimeAgo)
 	T.vc.SetReadDeadline(time.Time{})
 
 	T.setState(StateHijacked)
 
-	//回收缓冲对象，由于创建使用的缓冲比较大
+	// 回收缓冲对象，由于创建使用的缓冲比较大
 	putBufioWriter(T.bufw)
 	T.bufw = nil
 
@@ -119,7 +119,7 @@ func (T *conn) inLaunch() bool {
 	return len(T.activeReq) != 0
 }
 
-//发射，同一时间仅接收一台客户端与设备连接，其它上锁等待
+// 发射，同一时间仅接收一台客户端与设备连接，其它上锁等待
 func (T *conn) RoundTrip(req *Request) (resp *Response, err error) {
 	return T.RoundTripContext(context.Background(), req)
 }
@@ -136,12 +136,12 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		return nil, ErrHijacked
 	}
 
-	//处理原始数据，请求将得不出回应。
+	// 处理原始数据，请求将得不出回应。
 	if T.handleFunc != nil {
 		return nil, ErrRwaControl
 	}
 
-	//请求不能为空
+	// 请求不能为空
 	if req == nil {
 		return nil, ErrReqUnavailable
 	}
@@ -150,7 +150,7 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		T.activeReq = make(map[string]chan *Response)
 	}
 
-	//防止踩到狗屎运
+	// 防止踩到狗屎运
 	var nonce string
 	for i := 0; i < 1000; i++ {
 		nonce, err = Nonce()
@@ -163,13 +163,13 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		time.Sleep(time.Millisecond)
 	}
 
-	//导出设备支持的请求格式
+	// 导出设备支持的请求格式
 	riot, err := req.RequestConfig(nonce)
 	if err != nil {
 		return nil, err
 	}
 
-	//设备支持的请求格式转字节
+	// 设备支持的请求格式转字节
 	reqByte, err := riot.Marshal()
 	if err != nil {
 		return nil, err
@@ -188,28 +188,37 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 	T.mu.Unlock()
 	defer T.mu.Lock()
 
+	// 如果上下文没有设置超时，同时设备没有返回响应。结果将会阻塞，造成死锁。
+	// 在此为上下文加上服务器内置读取超时等待响应
+	if _, ok := ctx.Deadline(); !ok {
+		if d := T.server.ReadTimeout; d != 0 {
+			var cancel func()
+			ctx, cancel = context.WithTimeout(ctx, d)
+			defer cancel()
+		}
+	}
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-T.ctx.Done():
 		return nil, ErrConnClose
 	case res := <-done:
-		//设备返回一个响应
+		// 设备返回一个响应
 		res.Request = req
 		return res, nil
 	}
 }
 
-//写入一行数据
+// 写入一行数据
 func (T *conn) writeLineByte(b []byte) error {
-	//设置写入超时
+	// 设置写入超时
 	if d := T.server.WriteTimeout; d != 0 {
 		T.rwc.SetWriteDeadline(time.Now().Add(d))
 	}
 
 	T.logDebugWriteData(b)
 
-	//客户发送一个请求到设备
+	// 客户发送一个请求到设备
 	n, err := T.bufw.Write(b)
 	if err != nil {
 		return err
@@ -221,7 +230,7 @@ func (T *conn) writeLineByte(b []byte) error {
 	return nil
 }
 
-//读取一行数据
+// 读取一行数据
 func (T *conn) readLineBytes() (b []byte, err error) {
 	if T.hijackedv.isTrue() {
 		return nil, ErrHijacked
@@ -231,12 +240,12 @@ func (T *conn) readLineBytes() (b []byte, err error) {
 		T.rwc.SetReadDeadline(time.Now().Add(d))
 	}
 
-	//设置读取限制大小
-	//恢复读取大小限制
+	// 设置读取限制大小
+	// 恢复读取大小限制
 	T.vc.SetReadLimit(T.server.maxLineBytes())
 	defer T.vc.SetReadLimit(0)
 
-	//读取行格式
+	// 读取行格式
 	tp := newTextprotoReader(T.bufr)
 	defer putTextprotoReader(tp)
 	b, err = tp.ReadLineBytes()
@@ -249,25 +258,25 @@ func (T *conn) readLineBytes() (b []byte, err error) {
 	return b, err
 }
 
-//解析响应
+// 解析响应
 func (T *conn) readResponse(ctx context.Context, lineBytes []byte) (res *Response, err error) {
 	if T.hijackedv.isTrue() {
 		return nil, ErrHijacked
 	}
 
-	//使用外部解析函数
+	// 使用外部解析函数
 	var externalHandle bool
 	if hr := T.server.HandlerResponse; hr != nil {
 		br := bytes.NewReader(lineBytes)
 		res, err = hr(br)
 		if err != nil && err != ErrReqUnavailable {
-			//其它错误
+			// 其它错误
 			return
 		}
 		externalHandle = true
 	}
-	//1，没有外部处理
-	//2，外部处理无法识别
+	// 1，没有外部处理
+	// 2，外部处理无法识别
 	if !externalHandle || err == ErrReqUnavailable {
 		if !isResponse(lineBytes) {
 			return nil, ErrRespUnavailable
@@ -278,25 +287,25 @@ func (T *conn) readResponse(ctx context.Context, lineBytes []byte) (res *Respons
 	return
 }
 
-//解析请求
+// 解析请求
 func (T *conn) readRequest(ctx context.Context, lineBytes []byte) (req *Request, err error) {
 	if T.hijackedv.isTrue() {
 		return nil, ErrHijacked
 	}
-	//使用外部解析函数
+	// 使用外部解析函数
 	var externalHandle bool
 	if hr := T.server.HandlerRequest; hr != nil {
 		br := bytes.NewReader(lineBytes)
 		req, err = hr(br)
 		if err != nil && err != ErrReqUnavailable {
-			//其它错误
+			// 其它错误
 			return
 		}
 		externalHandle = true
 	}
 
-	//1，没有外部处理
-	//2，外部处理无法识别
+	// 1，没有外部处理
+	// 2，外部处理无法识别
 	if !externalHandle || err == ErrReqUnavailable {
 		if !isRequest(lineBytes) {
 			return nil, ErrReqUnavailable
@@ -323,7 +332,7 @@ func (T *conn) readRequest(ctx context.Context, lineBytes []byte) (req *Request,
 	return
 }
 
-//服务
+// 服务
 func (T *conn) serve(ctx context.Context) {
 	T.remoteAddr = T.rwc.RemoteAddr().String()
 	ctx = context.WithValue(ctx, LocalAddrContextKey, T.rwc.LocalAddr())
@@ -356,9 +365,9 @@ func (T *conn) serve(ctx context.Context) {
 		}
 		T.tlsState = new(tls.ConnectionState)
 		*T.tlsState = tlsConn.ConnectionState()
-		//待验证证书请求的协议
-		//NegotiatedProtocol 是客户端携带过来的
-		//TLSNextProto 是服务处理该协议的
+		// 待验证证书请求的协议
+		// NegotiatedProtocol 是客户端携带过来的
+		// TLSNextProto 是服务处理该协议的
 		if proto := T.tlsState.NegotiatedProtocol; validNPN(proto) {
 			if fn := T.server.TLSNextProto[proto]; fn != nil {
 				h := initNPNRequest{ctx, T.server, tlsConn}
@@ -368,23 +377,23 @@ func (T *conn) serve(ctx context.Context) {
 		}
 	}
 
-	//JSON格式
+	// JSON格式
 	T.vc = vconn.NewConn(T.rwc).(*vconn.Conn)
 	T.vc.DisableBackgroundRead(true)
 	T.bufr = newBufioReader(T.vc)
 	T.bufw = newBufioWriterSize(T.vc, 4<<10)
 
-	//连接的上下文
+	// 连接的上下文
 	T.ctx, T.cancelCtx = context.WithCancel(ctx)
 	defer T.cancelCtx()
 
 	for {
 		if T.server.shuttingDown() {
-			//服务器已经下线
+			// 服务器已经下线
 			return
 		}
 
-		//自定义连接处理函数
+		// 自定义连接处理函数
 		if hf := T.handleFunc; hf != nil && !T.inLaunch() {
 			if err := hf(T.vc, T.bufr); err != nil {
 				T.server.logf(LogErr, "viot: 从IP(%v)处理原始数据错误（%v）", T.remoteAddr, err)
@@ -392,7 +401,7 @@ func (T *conn) serve(ctx context.Context) {
 			}
 			T.handleFunc = nil
 			if err := T.idleWait(); err != nil {
-				//等待数据，读取超时就退出
+				// 等待数据，读取超时就退出
 				return
 			}
 			continue
@@ -408,21 +417,21 @@ func (T *conn) serve(ctx context.Context) {
 			return
 		}
 
-		//开始发数据，前面有很多空行。需要跳过空行
-		//这样的情况需要处理\n\n\n\n\n{....}\n
+		// 开始发数据，前面有很多空行。需要跳过空行
+		// 这样的情况需要处理\n\n\n\n\n{....}\n
 		if len(lineBytes) == 0 {
 			continue
 		}
 
-		//设备发来请求，等待服务器响应信息
+		// 设备发来请求，等待服务器响应信息
 		req, err := T.readRequest(T.ctx, lineBytes)
-		//不是有效请求
+		// 不是有效请求
 		if err == ErrReqUnavailable {
 			if T.inLaunch() {
 				res, err := T.readResponse(T.ctx, lineBytes)
 				if err != nil {
 					T.logErrReceive(err)
-					//不能识别的数据
+					// 不能识别的数据
 					return
 				}
 
@@ -438,7 +447,7 @@ func (T *conn) serve(ctx context.Context) {
 			}
 
 			if err = T.idleWait(); err != nil {
-				//等待数据，读取超时就退出
+				// 等待数据，读取超时就退出
 				return
 			}
 
@@ -459,46 +468,46 @@ func (T *conn) serve(ctx context.Context) {
 		}
 		w.dw.res = w
 
-		//设置写入超时时间
+		// 设置写入超时时间
 		if d := T.server.WriteTimeout; d != 0 {
 			T.rwc.SetWriteDeadline(time.Now().Add(d))
 		}
 
-		//这里内部不能 go func 和 ctx 一起使用。否则会被取消
+		// 这里内部不能 go func 和 ctx 一起使用。否则会被取消
 		serverHandler{T.server}.ServeIOT(w, w.req)
 		w.req.cancelCtx()
 
-		//劫持
-		//连接非法关闭
+		// 劫持
+		// 连接非法关闭
 		if T.hijackedv.isTrue() || T.closed {
 			return
 		}
 
-		//设置完成，生成body，发送至客户端
+		// 设置完成，生成body，发送至客户端
 		if err := w.done(); err != nil {
 			T.server.logf(LogErr, "viot: 往IP(%s)写入数据错误（%v）", T.remoteAddr, err)
 			return
 		}
 
-		//不能重用连接，客户端 或 服务端设置了不支持重用
+		// 不能重用连接，客户端 或 服务端设置了不支持重用
 		if w.closeAfterReply {
 			T.closeWriteAndWait()
 			return
 		}
 
-		//不支持长连接或服务器已经下线
+		// 不支持长连接或服务器已经下线
 		if !T.server.doKeepAlives() {
 			return
 		}
 
 		if err = T.idleWait(); err != nil {
-			//等待数据，读取超时就退出
+			// 等待数据，读取超时就退出
 			return
 		}
 	}
 }
 
-//设置连接状态
+// 设置连接状态
 func (T *conn) setState(state ConnState) {
 	switch state {
 	case StateNew:
@@ -543,10 +552,9 @@ var connStateInterface = [...]interface{}{
 }
 
 func (T *conn) idleWait() error {
-
 	T.setState(StateIdle)
 
-	//空闲等待，自动处理多余的换行符
+	// 空闲等待，自动处理多余的换行符
 	first := time.Now()
 	for {
 		if d := T.server.idleTimeout(); d != 0 {
@@ -573,9 +581,9 @@ func (T *conn) idleWait() error {
 	return nil
 }
 
-//回收缓冲对象
+// 回收缓冲对象
 func (T *conn) finalFlush() {
-	//如果连接是被劫持，不支持调用此函数，否则爆panic
+	// 如果连接是被劫持，不支持调用此函数，否则爆panic
 	if T.bufr != nil {
 		putBufioReader(T.bufr)
 		T.bufr = nil
@@ -598,7 +606,7 @@ type closeWriter interface {
 
 var _ closeWriter = (*net.TCPConn)(nil)
 
-//关闭并写入
+// 关闭并写入
 func (T *conn) closeWriteAndWait() {
 	if tcp, ok := T.rwc.(closeWriter); ok {
 		tcp.CloseWrite()
@@ -606,18 +614,18 @@ func (T *conn) closeWriteAndWait() {
 	time.Sleep(rstAvoidanceDelay)
 }
 
-//关闭连接
+// 关闭连接
 func (T *conn) Close() error {
-	//需要上锁，否则会清空T.bufr 或 T.bufw
+	// 需要上锁，否则会清空T.bufr 或 T.bufw
 	T.mu.Lock()
 	defer T.mu.Unlock()
 
 	T.closed = true
 
-	//取消连接上下文
+	// 取消连接上下文
 	T.cancelCtx()
 
-	//释放缓冲对象
+	// 释放缓冲对象
 	defer T.finalFlush()
 	T.setState(StateClosed)
 	return T.rwc.Close()
@@ -626,9 +634,11 @@ func (T *conn) Close() error {
 func (T *conn) logDebugWriteData(a interface{}) {
 	T.server.logDebugWriteData(T.remoteAddr, a)
 }
+
 func (T *conn) logDebugReadData(a interface{}) {
 	T.server.logDebugReadData(T.remoteAddr, a)
 }
+
 func (T *conn) logErrReceive(err error) {
 	T.server.logf(LogErr, "viot: 从IP(%v)接收数据错误（%v）", T.remoteAddr, err)
 }
