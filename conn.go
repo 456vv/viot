@@ -230,7 +230,7 @@ func (T *conn) writeLineByte(b []byte) error {
 		return err
 	}
 	if rbn := len(b); n != rbn {
-		return fmt.Errorf("Actual data length %d，Length of sent data %d", rbn, n)
+		return fmt.Errorf("actual data length %d, Length of sent data %d", rbn, n)
 	}
 	T.bufw.Flush()
 	return nil
@@ -325,11 +325,11 @@ func (T *conn) readRequest(ctx context.Context, lineBytes []byte) (req *Request,
 	}
 
 	if req.ProtoMajor != 1 {
-		return nil, errors.New("Unsupported protocol version")
+		return nil, errors.New("unsupported protocol version")
 	}
 
 	if req.Host != "" && !httpguts.ValidHostHeader(req.Host) {
-		return nil, errors.New("Malformation Host")
+		return nil, errors.New("malformation Host")
 	}
 
 	req.ctx, req.cancelCtx = context.WithCancel(ctx)
@@ -402,7 +402,7 @@ func (T *conn) serve(ctx context.Context) {
 		// 自定义连接处理函数
 		if hf := T.handleFunc; hf != nil && !T.inLaunch() {
 			if err := hf(T.vc, T.bufr); err != nil {
-				T.server.logf(LogErr, "viot: 从IP(%v)处理原始数据错误（%v）", T.remoteAddr, err)
+				T.server.logf(LogErr, "viot: 从IP(%v)处理原始数据错误:%v", T.remoteAddr, err)
 				return
 			}
 			T.handleFunc = nil
@@ -480,8 +480,8 @@ func (T *conn) serve(ctx context.Context) {
 		}
 
 		// 这里内部不能 go func 和 ctx 一起使用。否则会被取消
-		serverHandler{T.server}.ServeIOT(w, w.req)
-		w.req.cancelCtx()
+		serverHandler{T.server}.ServeIOT(w, req)
+		req.cancelCtx()
 
 		// 劫持
 		// 连接非法关闭
@@ -491,7 +491,7 @@ func (T *conn) serve(ctx context.Context) {
 
 		// 设置完成，生成body，发送至客户端
 		if err := w.done(); err != nil {
-			T.server.logf(LogErr, "viot: 往IP(%s)写入数据错误（%v）", T.remoteAddr, err)
+			T.logErrSend(err)
 			return
 		}
 
@@ -647,4 +647,8 @@ func (T *conn) logDebugReadData(a interface{}) {
 
 func (T *conn) logErrReceive(err error) {
 	T.server.logf(LogErr, "viot: 从IP(%v)接收数据错误:%v", T.remoteAddr, err)
+}
+
+func (T *conn) logErrSend(err error) {
+	T.server.logf(LogErr, "viot: 从IP(%v)发送数据错误:%v", T.remoteAddr, err)
 }
