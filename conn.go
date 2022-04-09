@@ -152,7 +152,7 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 
 	// 防止踩到狗屎运
 	var nonce string
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		nonce, err = Nonce()
 		if err != nil {
 			return nil, err
@@ -180,27 +180,33 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 	defer close(done)
 	defer delete(T.activeReq, nonce)
 
-	err = T.writeLineByte(reqByte)
-	if err != nil {
+	if err = T.writeLineByte(reqByte); err != nil {
 		return nil, err
 	}
 
 	T.mu.Unlock()
 	defer T.mu.Lock()
 
-	// 如果上下文没有设置超时，同时设备没有返回响应。结果将会阻塞，造成死锁。
-	// 在此为上下文加上服务器内置读取超时等待响应
-	if _, ok := ctx.Deadline(); !ok {
-		if d := T.server.ReadTimeout; d != 0 {
-			var cancel func()
-			ctx, cancel = context.WithTimeout(ctx, d)
-			defer cancel()
-		}
+	// 如果ctx没有设置超时，同时设备没有返回响应。结果将会阻塞，造成死锁。
+	// 在此为上下文加上服务器的读取超时等待响应
+	var (
+		rCtx   = req.Context()
+		cancel func()
+	)
+	if d := T.server.ReadTimeout; d != 0 {
+		rCtx, cancel = context.WithTimeout(rCtx, d)
+		defer cancel()
 	}
+
 	select {
 	case <-ctx.Done():
+		// 上下文取消
 		return nil, ctx.Err()
+	case <-rCtx.Done():
+		// 客户端请求结束
+		return nil, rCtx.Err()
 	case <-T.ctx.Done():
+		// 当前连接关闭
 		return nil, ErrConnClose
 	case res := <-done:
 		// 设备返回一个响应
@@ -640,5 +646,5 @@ func (T *conn) logDebugReadData(a interface{}) {
 }
 
 func (T *conn) logErrReceive(err error) {
-	T.server.logf(LogErr, "viot: 从IP(%v)接收数据错误（%v）", T.remoteAddr, err)
+	T.server.logf(LogErr, "viot: 从IP(%v)接收数据错误:%v", T.remoteAddr, err)
 }
