@@ -121,7 +121,7 @@ func (T *conn) inLaunch() bool {
 
 // 发射，同一时间仅接收一台客户端与设备连接，其它上锁等待
 func (T *conn) RoundTrip(req *Request) (resp *Response, err error) {
-	return T.RoundTripContext(context.Background(), req)
+	return T.RoundTripContext(req.Context(), req)
 }
 
 func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Response, err error) {
@@ -193,9 +193,13 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		rCtx   = req.Context()
 		cancel func()
 	)
-	if d := T.server.ReadTimeout; d != 0 {
-		rCtx, cancel = context.WithTimeout(rCtx, d)
-		defer cancel()
+	if _, ok := ctx.Deadline(); !ok {
+		if _, ok := rCtx.Deadline(); !ok {
+			if d := T.server.ReadTimeout; d != 0 {
+				ctx, cancel = context.WithTimeout(ctx, d)
+				defer cancel()
+			}
+		}
 	}
 
 	select {
@@ -384,7 +388,7 @@ func (T *conn) serve(ctx context.Context) {
 	}
 
 	// JSON格式
-	T.vc = vconn.NewConn(T.rwc).(*vconn.Conn)
+	T.vc = vconn.New(T.rwc)
 	T.vc.DisableBackgroundRead(true)
 	T.bufr = newBufioReader(T.vc)
 	T.bufw = newBufioWriterSize(T.vc, 4<<10)

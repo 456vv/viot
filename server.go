@@ -13,34 +13,28 @@ import (
 	"time"
 )
 
-//上下文中使用的key
-var (
-	ServerContextKey    = &contextKey{"iot-server"} // 服务器
-	LocalAddrContextKey = &contextKey{"local-addr"} // 监听地址
-)
-
-//处理函数接口
+// 处理函数接口
 type Handler interface {
 	ServeIOT(ResponseWriter, *Request)
 }
 
-//处理函数
+// 处理函数
 type HandlerFunc func(ResponseWriter, *Request)
 
 func (T HandlerFunc) ServeIOT(w ResponseWriter, r *Request) {
 	T(w, r)
 }
 
-//服务处理函数，在服务器没有设置Handler字段，为了保证不出错。
+// 服务处理函数，在服务器没有设置Handler字段，为了保证不出错。
 type serverHandler struct {
-	srv *Server //服务器
+	srv *Server // 服务器
 }
 
-//处理函数
+// 处理函数
 func (T serverHandler) ServeIOT(rw ResponseWriter, req *Request) {
 	handler := T.srv.Handler
 	if handler == nil {
-		//这个要做一个默认处理！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！
+		// 这个要做一个默认处理！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！
 		return
 	}
 	handler.ServeIOT(rw, req)
@@ -49,12 +43,12 @@ func (T serverHandler) ServeIOT(rw ResponseWriter, req *Request) {
 type LogLevel int
 
 const (
-	LogNone  LogLevel = 1 << iota //1
-	LogErr                        //2
-	LogDebug                      //4
+	LogNone  LogLevel = 1 << iota // 1
+	LogErr                        // 2
+	LogDebug                      // 4
 )
 
-//服务器
+// 服务器
 type Server struct {
 	Addr              string                                                             // 如果空，TCP监听的地址是，“:8000”
 	Handler           Handler                                                            // 如果nil，处理器调用，http.DefaultServeMux
@@ -80,14 +74,14 @@ type Server struct {
 	onShutdown []func()                   // 服务器下线事件
 }
 
-//初始化
+// 初始化
 func (T *Server) init() {
 	if T.doneChan == nil {
 		T.doneChan = make(chan struct{})
 	}
 }
 
-//行数据大小
+// 行数据大小
 func (T *Server) maxLineBytes() int {
 	if T.MaxLineBytes > 0 {
 		return T.MaxLineBytes
@@ -95,17 +89,17 @@ func (T *Server) maxLineBytes() int {
 	return DefaultLineBytes
 }
 
-//关闭通道
+// 关闭通道
 func (T *Server) closeDoneChan() {
 	select {
 	case <-T.doneChan:
-		//如果已经关闭，不需要再关闭，直接跳过
+		// 如果已经关闭，不需要再关闭，直接跳过
 	default:
 		close(T.doneChan)
 	}
 }
 
-//记录监听
+// 记录监听
 func (T *Server) trackListener(ln *net.Listener, add bool) bool {
 	T.mu.Lock()
 	defer T.mu.Unlock()
@@ -129,7 +123,7 @@ func (T *Server) trackListener(ln *net.Listener, add bool) bool {
 	return true
 }
 
-//删除监听
+// 删除监听
 func (T *Server) closeListeners() error {
 	T.mu.Lock()
 	defer T.mu.Unlock()
@@ -143,7 +137,7 @@ func (T *Server) closeListeners() error {
 	return err
 }
 
-//记录连接
+// 记录连接
 func (T *Server) trackConn(c *conn, add bool) {
 	T.mu.Lock()
 	defer T.mu.Unlock()
@@ -157,7 +151,7 @@ func (T *Server) trackConn(c *conn, add bool) {
 	}
 }
 
-//关闭连接
+// 关闭连接
 func (T *Server) closeConns() error {
 	T.mu.Lock()
 	defer T.mu.Unlock()
@@ -168,7 +162,7 @@ func (T *Server) closeConns() error {
 	return nil
 }
 
-//服务器监听，监听地址可以设置Addr。默认为""，则是8000
+// 服务器监听，监听地址可以设置Addr。默认为""，则是8000
 //	error			错误
 func (T *Server) ListenAndServe() error {
 	addr := T.Addr
@@ -182,7 +176,7 @@ func (T *Server) ListenAndServe() error {
 	return T.Serve(ln)
 }
 
-//服务器监听
+// 服务器监听
 //	l net.Listener	监听
 //	error			错误
 func (T *Server) Serve(l net.Listener) error {
@@ -191,7 +185,7 @@ func (T *Server) Serve(l net.Listener) error {
 	defer l.Close()
 
 	if !T.trackListener(&l, true) {
-		//服务器下线
+		// 服务器下线
 		return ErrServerClosed
 	}
 	defer T.trackListener(&l, false)
@@ -213,7 +207,7 @@ func (T *Server) Serve(l net.Listener) error {
 		if e != nil {
 			select {
 			case <-T.doneChan:
-				//服务器关闭后，信道被打通。退出
+				// 服务器关闭后，信道被打通。退出
 				return ErrServerClosed
 			default:
 			}
@@ -225,7 +219,7 @@ func (T *Server) Serve(l net.Listener) error {
 		}
 		tempDelay = 0
 
-		//新 goroutine 进程
+		// 新 goroutine 进程
 		go func(ctx context.Context, rw net.Conn) {
 			nrw := rw
 			connCtx := ctx
@@ -245,18 +239,18 @@ func (T *Server) Serve(l net.Listener) error {
 	}
 }
 
-//关闭服务器
+// 关闭服务器
 //	error			错误
 func (T *Server) Close() error {
-	//关闭服务器
+	// 关闭服务器
 	T.closeDoneChan()
 
-	//关闭监听和连接
+	// 关闭监听和连接
 	T.closeConns()
 	return T.closeListeners()
 }
 
-//空闲超时时间，如果没有设置，则使用读取时间
+// 空闲超时时间，如果没有设置，则使用读取时间
 func (T *Server) idleTimeout() time.Duration {
 	if T.IdleTimeout != 0 {
 		return T.IdleTimeout
@@ -264,7 +258,7 @@ func (T *Server) idleTimeout() time.Duration {
 	return T.ReadTimeout
 }
 
-//关闭，等待连接完成
+// 关闭，等待连接完成
 //	ctx context.Context	上下文
 //	error				错误
 func (T *Server) Shutdown(ctx context.Context) error {
@@ -277,11 +271,11 @@ func (T *Server) Shutdown(ctx context.Context) error {
 		go f()
 	}
 
-	//定时关闭空闲连接
+	// 定时关闭空闲连接
 	ticker := time.NewTicker(shutdownPollInterval)
 	defer ticker.Stop()
 	for {
-		//返回 false 表示还有连接不是空闲状态
+		// 返回 false 表示还有连接不是空闲状态
 		if T.closeIdleConns() {
 			return lnerr
 		}
@@ -293,13 +287,13 @@ func (T *Server) Shutdown(ctx context.Context) error {
 	}
 }
 
-//注册更新事件
+// 注册更新事件
 //	f func()		服务下线时调用此函数
 func (T *Server) RegisterOnShutdown(f func()) {
 	T.onShutdown = append(T.onShutdown, f)
 }
 
-//设置长连接开启
+// 设置长连接开启
 //	v bool			设置支持长连接
 func (T *Server) SetKeepAlivesEnabled(v bool) {
 	if v {
@@ -308,12 +302,11 @@ func (T *Server) SetKeepAlivesEnabled(v bool) {
 	}
 	atomic.StoreInt32(&T.disableKeepAlives, 1)
 
-	//关闭空闲的连接，让新连接生效keep-Alives
+	// 关闭空闲的连接，让新连接生效keep-Alives
 	T.closeIdleConns()
-
 }
 
-//日志
+// 日志
 func (T *Server) logf(level LogLevel, format string, v ...interface{}) {
 	if T.ErrorLogLevel&level != 0 {
 		txt := fmt.Sprintf(format+"\n", v...)
@@ -323,24 +316,26 @@ func (T *Server) logf(level LogLevel, format string, v ...interface{}) {
 		log.Print(txt)
 	}
 }
+
 func (T *Server) logDebugReadData(addr string, b interface{}) {
 	T.logf(LogDebug, "viot: 从IP(%s)读取数据:\n%s", addr, b)
 }
+
 func (T *Server) logDebugWriteData(addr string, b interface{}) {
 	T.logf(LogDebug, "viot: 往IP(%s)写入数据:\n%s", addr, b)
 }
 
-//判断服务器是否支持长连接
+// 判断服务器是否支持长连接
 func (T *Server) doKeepAlives() bool {
 	return atomic.LoadInt32(&T.disableKeepAlives) == 0 && !T.shuttingDown()
 }
 
-//判断服务器下线...
+// 判断服务器下线...
 func (T *Server) shuttingDown() bool {
 	return atomic.LoadInt32(&T.inShutdown) != 0
 }
 
-//关闭空闲连接
+// 关闭空闲连接
 func (T *Server) closeIdleConns() bool {
 	T.mu.Lock()
 	defer T.mu.Unlock()
@@ -354,6 +349,6 @@ func (T *Server) closeIdleConns() bool {
 		c.rwc.Close()
 		delete(T.activeConn, c)
 	}
-	//如果没有可用的空闲连接，返回true
+	// 如果没有可用的空闲连接，返回true
 	return quiescent
 }

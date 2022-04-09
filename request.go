@@ -20,13 +20,13 @@ type pastRequestConfig struct {
 	Home string `json:"home,omitempty"`
 }
 
-//iot接收或发送数据格式带BODY
+// iot接收或发送数据格式带BODY
 type requestConfigBody struct {
 	*RequestConfig
 	Body interface{} `json:"body,omitempty"`
 }
 
-//iot接收或发送数据格式
+// iot接收或发送数据格式
 type RequestConfig struct {
 	Nonce  string `json:"nonce"` //-,omitempty,string,number,boolean
 	Proto  string `json:"proto"`
@@ -37,19 +37,19 @@ type RequestConfig struct {
 	body   interface{}
 }
 
-//设置主体
+// 设置主体
 //	i interface{}	主体信息
 func (T *RequestConfig) SetBody(i interface{}) {
 	T.body = i
 }
 
-//读取主体
+// 读取主体
 //	interface{}		主体信息
 func (T *RequestConfig) GetBody() interface{} {
 	return T.body
 }
 
-//编码，字节末尾追加上一个 \\n 字节
+// 编码，字节末尾追加上一个 \\n 字节
 //	[]byte			编码后的字节
 //	error			错误
 func (T *RequestConfig) Marshal() ([]byte, error) {
@@ -60,7 +60,7 @@ func (T *RequestConfig) Marshal() ([]byte, error) {
 	return append(b, '\n'), nil
 }
 
-//解码
+// 解码
 //	data []byte		编码后的字节
 //	error			错误
 func (T *RequestConfig) Unmarshal(data []byte) error {
@@ -96,10 +96,9 @@ type Request struct {
 	bodyr     *bytes.Buffer      // 请求的数据(缓存让GetBody调用)
 	ctx       context.Context    // 上下文
 	cancelCtx context.CancelFunc // 上下文函数
-
 }
 
-//新的请求
+// 新的请求
 //	method, url string		方法，地址(viot://host/path)
 //	body interface{}		数据
 //	*Request, error			请求，错误
@@ -107,7 +106,7 @@ func NewRequest(method, url string, body interface{}) (*Request, error) {
 	return NewRequestWithContext(context.Background(), method, url, body)
 }
 
-//新的请求
+// 新的请求
 //	ctx context.Context		上下文
 //	method, urlStr string	方法，地址(viot://host/path)
 //	body interface{}		数据
@@ -177,7 +176,7 @@ func NewRequestWithContext(ctx context.Context, method, urlStr string, body inte
 	return req, nil
 }
 
-//读取编号
+// 读取编号
 //	string	请求编号
 func (T *Request) GetNonce() string {
 	return T.nonce
@@ -187,7 +186,7 @@ func (T *Request) GetNonce() string {
 //	i interface{}	数据写入这里
 //	error			错误
 func (T *Request) GetBody(i interface{}) error {
-	//这是开发者自行创建的Request，设置SetBody后可以调用GetBody读出
+	// 这是开发者自行创建的Request，设置SetBody后可以调用GetBody读出
 	if T.bodyw != nil {
 		if !builtin.Convert(i, T.bodyw) {
 			return errors.New("viot:  the type is not supported")
@@ -195,7 +194,7 @@ func (T *Request) GetBody(i interface{}) error {
 		return nil
 	}
 
-	//非 POST 提交，不支持提取BODY数据
+	// 非 POST 提交，不支持提取BODY数据
 	if T.bodyr == nil {
 		return ErrGetBodyed
 	}
@@ -215,17 +214,17 @@ func (T *Request) SetBody(i interface{}) error {
 	return nil
 }
 
-//判断版本号
+// 判断版本号
 func (T *Request) ProtoAtLeast(major, minor int) bool {
 	return T.ProtoMajor > major || T.ProtoMajor == major && T.ProtoMinor >= minor
 }
 
-//应该关闭
+// 应该关闭
 func (T *Request) wantsClose() bool {
 	return hasToken(T.Header.Get("Connection"), "close")
 }
 
-//读取上下文
+// 读取上下文
 //	context.Context	上下文
 func (T *Request) Context() context.Context {
 	if T.ctx != nil {
@@ -234,7 +233,7 @@ func (T *Request) Context() context.Context {
 	return context.Background()
 }
 
-//替换上下文
+// 替换上下文
 //	ctx context.Context	上下文
 //	*Request			请求
 func (T *Request) WithContext(ctx context.Context) *Request {
@@ -254,7 +253,7 @@ func (T *Request) WithContext(ctx context.Context) *Request {
 	return r2
 }
 
-//基本验证
+// 基本验证
 //	username, password string	用户名，密码
 //	ok bool						如果有用户名或密码
 func (T *Request) GetBasicAuth() (username, password string, ok bool) {
@@ -265,13 +264,13 @@ func (T *Request) GetBasicAuth() (username, password string, ok bool) {
 	return parseBasicAuth(auth)
 }
 
-//设置基本验证
+// 设置基本验证
 //	username, password string	用户名，密码
 func (T *Request) SetBasicAuth(username, password string) {
 	T.Header.Set("Authorization", "Basic "+basicAuth(username, password))
 }
 
-//token验证
+// token验证
 //	token string	令牌
 func (T *Request) GetTokenAuth() string {
 	auth := T.Header.Get("Authorization")
@@ -285,18 +284,17 @@ func (T *Request) GetTokenAuth() string {
 	return auth[len(prefix):]
 }
 
-//设置token验证
+// 设置token验证
 //	token string	令牌
 func (T *Request) SetTokenAuth(token string) {
 	T.Header.Set("Authorization", "token "+token)
 }
 
-//请求，发往设备的请求
+// 请求，发往设备的请求
 //	nonce string		编号
 //	riot *RequestConfig	发往设备的请求
 //	err error			错误
 func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
-
 	host := T.Host
 	path := T.RequestURI
 	if T.URL != nil {
@@ -339,7 +337,7 @@ func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
 		riot.Header.Set("Connection", "close")
 	}
 
-	//如果没有另设置body，试试读取原有的body
+	// 如果没有另设置body，试试读取原有的body
 	if T.bodyw == nil {
 		T.GetBody(&T.bodyw)
 	}
