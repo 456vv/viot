@@ -194,8 +194,8 @@ func (T *ServerHandlerDynamic) Parse(r io.Reader) (err error) {
 	if T.Module == nil || len(dynmicType) < 3 {
 		return errors.New("viot: The file type of the first line of the file is not recognized")
 	}
-	if module, ok := T.Module[dynmicType[2:]]; ok {
-		shdt := module(T)
+	if m, ok := T.Module[dynmicType[2:]]; ok {
+		shdt := m(T)
 		shdt.SetPath(T.RootPath, T.PagePath)
 		err = shdt.Parse(bufr)
 		if err != nil {
