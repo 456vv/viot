@@ -59,7 +59,9 @@ type (
 
 // 上下文中使用的key
 var (
-	ServerContextKey    = &contextKey{"iot-server"} // 服务器
-	LocalAddrContextKey = &contextKey{"local-addr"} // 监听地址
-	SiteContextKey      = &contextKey{"iot-site"}   // 网站上下文
+	LocalAddrContextKey = &contextKey{"iot-localAddr"}
+	ListenerContextKey  = &contextKey{"iot-listener"}
+	ConnContextKey      = &contextKey{"iot-conn"}
+	ServerContextKey    = &contextKey{"iot-server"}
+	SiteContextKey      = &contextKey{"iot-site"}
 )

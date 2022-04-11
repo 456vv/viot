@@ -77,7 +77,7 @@ func (T *Route) ServeIOT(w ResponseWriter, r *Request) {
 	inf, ok := T.rt.Load(upath)
 	if ok {
 		forkReq()
-		inf.(Handler).ServeIOT(w, r)
+		inf.(Handler).ServeIOT(w, req)
 		if upath == req.URL.Path {
 			return
 		}
