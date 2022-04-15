@@ -146,11 +146,8 @@ func (T *Client) DoCtx(ctx context.Context, req *Request) (resp *Response, err e
 	}
 
 	resp, err = ReadResponse(netConn, req)
-	if err != nil {
-		return
-	}
 	// 服务器已经关闭连接，不回收到池中
-	if resp.Close {
+	if err != nil || resp.Close {
 		if cp, ok := netConn.(vconnpool.Conn); ok {
 			cp.Discard()
 		}
