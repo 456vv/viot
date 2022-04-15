@@ -606,7 +606,7 @@ func (T *conn) finalFlush() {
 }
 
 // rstAvoidanceDelay是在关闭整个套接字之前关闭TCP连接的写入端之后我们休眠的时间量。
-// 通过睡眠，我们增加了客户端看到我们的FIN并处理其最终数据的机会，然后再处理后续的RS，从而关闭已知未读数据的连接。
+// 通过睡眠，我们增加了客户端看到我们的FIN并处理其最终数据的机会，然后再处理后续的RST，从而关闭已知未读数据的连接。
 // 这个RST似乎主要在BSD系统上。 （和Windows？）这个超时有点武断（大概的延迟）。
 const rstAvoidanceDelay = 500 * time.Millisecond
 
