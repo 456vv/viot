@@ -21,7 +21,7 @@ import (
 	"golang.org/x/net/http/httpguts"
 )
 
-//在切片中查找
+// 在切片中查找
 func strSliceContains(ss []string, t string) bool {
 	for _, v := range ss {
 		if v == t {
@@ -31,8 +31,8 @@ func strSliceContains(ss []string, t string) bool {
 	return false
 }
 
-//查找是否包含所有字段
-//判断 ss 列表中的关键字，是否在 b 存在
+// 查找是否包含所有字段
+// 判断 ss 列表中的关键字，是否在 b 存在
 func byteFindAll(b []byte, ss []string) bool {
 	for _, v := range ss {
 		if !bytes.Contains(b, []byte(v)) {
@@ -42,7 +42,7 @@ func byteFindAll(b []byte, ss []string) bool {
 	return true
 }
 
-//是请求
+// 是请求
 func isRequest(lineBytes []byte) bool {
 	if byteFindAll(lineBytes, reqFeature1) || byteFindAll(lineBytes, reqFeature2) {
 		return true
@@ -50,17 +50,17 @@ func isRequest(lineBytes []byte) bool {
 	return false
 }
 
-//是响应
+// 是响应
 func isResponse(lineBytes []byte) bool {
 	return byteFindAll(lineBytes, respFeature1)
 }
 
-//判断方法
+// 判断方法
 func validMethod(method string) bool {
 	return len(method) > 0 && strSliceContains(methods, method)
 }
 
-//判断协议
+// 判断协议
 func validNPN(proto string) bool {
 	switch proto {
 	case "", "IOT/1.1", "IOT/1.0":
@@ -69,7 +69,7 @@ func validNPN(proto string) bool {
 	return true
 }
 
-//解析IOT请求版本
+// 解析IOT请求版本
 //	vers string			版本字符串
 //	major, minor int	大版号，小版号
 //	ok bool				true版本正确解析，否则失败
@@ -101,7 +101,7 @@ func ParseIOTVersion(vers string) (major, minor int, ok bool) {
 
 var textprotoReaderPool sync.Pool
 
-//创建文本格式读取
+// 创建文本格式读取
 func newTextprotoReader(br *bufio.Reader) *textproto.Reader {
 	if v := textprotoReaderPool.Get(); v != nil {
 		tr := v.(*textproto.Reader)
@@ -111,13 +111,13 @@ func newTextprotoReader(br *bufio.Reader) *textproto.Reader {
 	return textproto.NewReader(br)
 }
 
-//回收文本格式读取
+// 回收文本格式读取
 func putTextprotoReader(r *textproto.Reader) {
 	r.R = nil
 	textprotoReaderPool.Put(r)
 }
 
-//读取请求数据
+// 读取请求数据
 //	b io.Reader		需解析的数据，重要提醒：不要包含多个json块，它只能解析一个json块，其它数据块会被丢弃。这会清空你的io.Reader。
 //	req *Request	请求
 //	err error		错误
@@ -159,7 +159,7 @@ func readRequest(b io.Reader) (req *Request, err error) {
 		return nil, err
 	}
 
-	//释放内存，仅POST提交才支持body
+	// 释放内存，仅POST提交才支持body
 	if ij.Method != "POST" {
 		req.bodyr = nil
 	}
@@ -174,7 +174,7 @@ func readRequest(b io.Reader) (req *Request, err error) {
 		}
 	}
 	if ij.Home != "" && ij.Host == "" {
-		//向下兼容，已经过期
+		// 向下兼容，已经过期
 		ij.Host = ij.Home
 	}
 	req.nonce = ij.Nonce
@@ -187,7 +187,7 @@ func readRequest(b io.Reader) (req *Request, err error) {
 	return req, nil
 }
 
-//解析响应
+// 解析响应
 //	b io.Reader		需解析的数据，重要提醒：不要包含多个json块，它只能解析一个json块，其它数据块会被丢弃。这会清空你的io.Reader。
 //	res *Response	响应
 //	err error		错误
@@ -199,6 +199,7 @@ func ReadResponse(r io.Reader, req *Request) (res *Response, err error) {
 	res.Request = req
 	return
 }
+
 func readResponse(b io.Reader) (res *Response, err error) {
 	bufr := newBufioReader(b)
 	defer putBufioReader(bufr)
@@ -232,7 +233,7 @@ func readResponse(b io.Reader) (res *Response, err error) {
 	return res, nil
 }
 
-//应该关闭，判断请求协议是否支持长连接
+// 应该关闭，判断请求协议是否支持长连接
 func shouldClose(major, minor int, header Header) bool {
 	if major < 1 {
 		return true
@@ -251,7 +252,7 @@ var (
 	bufioWriter4kPool sync.Pool
 )
 
-//提取读取缓冲
+// 提取读取缓冲
 func newBufioReader(r io.Reader) *bufio.Reader {
 	if v := bufioReaderPool.Get(); v != nil {
 		br := v.(*bufio.Reader)
@@ -261,13 +262,13 @@ func newBufioReader(r io.Reader) *bufio.Reader {
 	return bufio.NewReader(r)
 }
 
-//回收读取缓冲
+// 回收读取缓冲
 func putBufioReader(br *bufio.Reader) {
 	br.Reset(nil)
 	bufioReaderPool.Put(br)
 }
 
-//分配写入缓冲
+// 分配写入缓冲
 func bufioWriterPool(size int) *sync.Pool {
 	switch size {
 	case 2 << 10:
@@ -278,7 +279,7 @@ func bufioWriterPool(size int) *sync.Pool {
 	return nil
 }
 
-//回收写入缓冲
+// 回收写入缓冲
 func putBufioWriter(bw *bufio.Writer) {
 	bw.Reset(nil)
 	if pool := bufioWriterPool(bw.Available()); pool != nil {
@@ -286,7 +287,7 @@ func putBufioWriter(bw *bufio.Writer) {
 	}
 }
 
-//提取写入缓冲
+// 提取写入缓冲
 func newBufioWriterSize(w io.Writer, size int) *bufio.Writer {
 	pool := bufioWriterPool(size)
 	if pool != nil {
@@ -299,7 +300,7 @@ func newBufioWriterSize(w io.Writer, size int) *bufio.Writer {
 	return bufio.NewWriterSize(w, size)
 }
 
-//判断状态码
+// 判断状态码
 func bodyAllowedForStatus(status int) bool {
 	switch {
 	case status >= 100 && status <= 199:
@@ -312,7 +313,7 @@ func bodyAllowedForStatus(status int) bool {
 	return true
 }
 
-//判断toKen
+// 判断toKen
 func hasToken(v, token string) bool {
 	if len(token) > len(v) || token == "" {
 		return false
@@ -345,12 +346,12 @@ func hasToken(v, token string) bool {
 	return false
 }
 
-//是无效符号
+// 是无效符号
 func isTokenBoundary(b byte) bool {
 	return b == ' ' || b == ',' || b == '\t'
 }
 
-//解析基本验证
+// 解析基本验证
 func parseBasicAuth(auth string) (username, password string, ok bool) {
 	const prefix = "Basic "
 	if !strings.HasPrefix(auth, prefix) {
@@ -368,22 +369,22 @@ func parseBasicAuth(auth string) (username, password string, ok bool) {
 	return cs[:s], cs[s+1:], true
 }
 
-//设置基本验证
+// 设置基本验证
 func basicAuth(username, password string) string {
 	auth := username + ":" + password
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-//生成编号
+// 生成编号
 //	nonce string	编号
 //	err error		错误
 func Nonce() (nonce string, err error) {
-	//创建编号
+	// 创建编号
 	bigInt, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt32))
 	if err != nil {
 		return "", fmt.Errorf("create nonce numbering failed %v", err)
 	}
-	//提取编号
+	// 提取编号
 	d, err := bigInt.MarshalText()
 	if err != nil {
 		return "", fmt.Errorf("extract nonce numbering failed %v", err)
@@ -391,25 +392,25 @@ func Nonce() (nonce string, err error) {
 	return string(d), nil
 }
 
-//是网络读取失败
+// 是网络读取失败
 func isCommonNetReadError(err error) bool {
 	if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
-		//网络失败,不要回复
+		// 网络失败,不要回复
 		return true
 	}
 	if oe, ok := err.(*net.OpError); ok && oe.Op == "read" {
-		//网络失败,不要回复
+		// 网络失败,不要回复
 		return true
 	}
 	// 读取错误或者被劫持连接
 	if err == io.EOF || err == io.ErrUnexpectedEOF || err == ErrHijacked {
-		//读取失败，不要回复
+		// 读取失败，不要回复
 		return true
 	}
 	return false
 }
 
-//快速设置错误
+// 快速设置错误
 //	w ResponseWriter	响应
 //	err string			错误字符串
 //	code int			错误代码
@@ -419,15 +420,15 @@ func Error(w ResponseWriter, err string, code int) {
 	w.SetBody(err)
 }
 
-//derogatoryDomain 贬域名
+// derogatoryDomain 贬域名
 //	host string             host地址
 //	f func(string) bool     调用 f 函数，并传入贬域名
 func derogatoryDomain(host string, f func(string) bool) {
-	//先全字匹配
+	// 先全字匹配
 	if f(host) {
 		return
 	}
-	//后通配符匹配
+	// 后通配符匹配
 	pos := strings.Index(host, ":")
 	var port string
 	if pos >= 0 {
@@ -457,10 +458,10 @@ func delay(wait, maxDelay time.Duration) time.Duration {
 	return wait
 }
 
-//给定"host", "host:port"或"[IPv6::address]:port",如果字符串包含端口,则返回true｡
+// 给定"host", "host:port"或"[IPv6::address]:port",如果字符串包含端口,则返回true｡
 func hasPort(s string) bool { return strings.LastIndex(s, ":") > strings.LastIndex(s, "]") }
 
-//将":port" 到 "" 以"rfc 3986"第6.2.3节第6.2.3节中的空端口｡
+// 将":port" 到 "" 以"rfc 3986"第6.2.3节第6.2.3节中的空端口｡
 func removeEmptyPort(host string) string {
 	if hasPort(host) {
 		return strings.TrimSuffix(host, ":")

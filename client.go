@@ -111,10 +111,9 @@ func (T *Client) DoCtx(ctx context.Context, req *Request) (resp *Response, err e
 		return nil, err
 	}
 
-	// 关闭连接，不回收到池中
+	// 客户端不需要这条连接，不回收到池中
 	if req.wantsClose() || req.Close {
-		cp, ok := netConn.(vconnpool.Conn)
-		if ok {
+		if cp, ok := netConn.(vconnpool.Conn); ok {
 			cp.Discard()
 		}
 	}
@@ -146,7 +145,18 @@ func (T *Client) DoCtx(ctx context.Context, req *Request) (resp *Response, err e
 		}
 	}
 
-	return ReadResponse(netConn, req)
+	resp, err = ReadResponse(netConn, req)
+	if err != nil {
+		return
+	}
+	// 服务器已经关闭连接，不回收到池中
+	if resp.Close {
+		if cp, ok := netConn.(vconnpool.Conn); ok {
+			cp.Discard()
+		}
+	}
+
+	return
 }
 
 // 快速提交
