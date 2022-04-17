@@ -196,6 +196,9 @@ func ReadResponse(r io.Reader, req *Request) (res *Response, err error) {
 	if err != nil {
 		return
 	}
+	if req.nonce != res.nonce {
+		return nil, ErrRespNonce
+	}
 	res.Request = req
 	return
 }
