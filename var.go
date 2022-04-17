@@ -25,6 +25,7 @@ var (
 	ErrConnClose       = errors.New("viot: Device connection is closed")
 	ErrReqUnavailable  = errors.New("viot: Request unavailable")
 	ErrRespUnavailable = errors.New("viot: Response unavailable")
+	ErrRespNonce       = errors.New("viot: Response nonce not recognized")
 
 	ErrHostInvalid   = errors.New("host invalid")
 	ErrURIInvalid    = errors.New("URI invalid")

@@ -1,6 +1,7 @@
 package viot
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -24,7 +25,11 @@ func connPool() *vconnpool.ConnPool {
 	}
 }
 
+// 正常回应
 func Test_Client_1(t *testing.T) {
+	as := assert.New(t, true)
+	cp := connPool()
+	defer cp.CloseIdleConnections()
 	tcptest.D2S("127.0.0.1:0", func(c net.Conn) {
 		defer c.Close()
 		for {
@@ -45,8 +50,6 @@ func Test_Client_1(t *testing.T) {
 			c.Write(respByte)
 		}
 	}, func(laddr net.Addr) {
-		cp := connPool()
-		defer cp.CloseIdleConnections()
 		client := Client{
 			Dialer:        cp,
 			Host:          "*",
@@ -56,14 +59,16 @@ func Test_Client_1(t *testing.T) {
 		}
 		t.Parallel()
 		for i := 0; i < 10; i++ {
-			t.Run(fmt.Sprint(i), func(t *testing.T) {
-				resq, err := client.Post("/test", Header{}, "123456")
-				assert.New(t, true).NotError(err).Equal(resq.Status, 200)
+			name := fmt.Sprint("/", i)
+			t.Run(name, func(t *testing.T) {
+				resq, err := client.Post(name, Header{}, "123456")
+				as.NotError(err).Equal(resq.Status, 200)
 			})
 		}
 	})
 }
 
+// 测试服务端关闭连接
 func Test_Client_2(t *testing.T) {
 	as := assert.New(t, true)
 	cp := connPool()
@@ -93,6 +98,39 @@ func Test_Client_2(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				res, err := client.Post(name, Header{}, "123")
 				as.NotError(err).NotNil(res)
+			})
+		}
+	})
+}
+
+// 测试客户超时
+func Test_Client_3(t *testing.T) {
+	as := assert.New(t, true)
+	cp := connPool()
+	defer cp.CloseIdleConnections()
+
+	tcptest.D2L("127.0.0.1:0", func(l net.Listener) {
+		srv := &Server{}
+		srv.Handler = HandlerFunc(func(w ResponseWriter, r *Request) {
+			time.Sleep(1e9)
+		})
+		err := srv.Serve(l)
+		as.Error(err)
+	}, func(addr net.Addr) {
+		client := &Client{
+			Dialer: cp,
+			Host:   "*",
+			Addr:   addr.String(),
+		}
+
+		t.Parallel()
+		for i := 0; i < 100; i++ {
+			name := fmt.Sprint("/", i)
+			t.Run(name, func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), 10e6)
+				res, err := client.PostCtx(ctx, name, Header{}, "123")
+				cancel()
+				as.Equal(err, context.DeadlineExceeded).Nil(res)
 			})
 		}
 	})

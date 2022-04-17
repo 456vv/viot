@@ -226,7 +226,7 @@ func (T *conn) writeLineByte(b []byte) error {
 		T.rwc.SetWriteDeadline(time.Now().Add(d))
 	}
 
-	T.logDebugWriteData(b)
+	T.logDebugWriteData(bytes.TrimSuffix(b, []byte{0x0a}))
 
 	// 客户发送一个请求到设备
 	n, err := T.bufw.Write(b)
@@ -478,7 +478,7 @@ func (T *conn) serve(ctx context.Context) {
 		}
 		w.dw.res = w
 
-		// 设置写入超时时间
+		// 设置写入超时时间,仅用于 w.Write 方法写入时间限制
 		if d := T.server.WriteTimeout; d != 0 {
 			T.rwc.SetWriteDeadline(time.Now().Add(d))
 		}
@@ -561,28 +561,24 @@ var connStateInterface = [...]interface{}{
 	StateClosed:   StateClosed,
 }
 
+// 空闲等待，自动处理多余的换行符
 func (T *conn) idleWait() error {
 	T.setState(StateIdle)
 
-	// 空闲等待，自动处理多余的换行符
-	first := time.Now()
+	if d := T.server.idleTimeout(); d != 0 {
+		T.rwc.SetReadDeadline(time.Now().Add(d))
+	}
 	for {
-		if d := T.server.idleTimeout(); d != 0 {
-			T.rwc.SetReadDeadline(first.Add(d))
-		}
 		c, err := T.bufr.ReadByte()
 		if err != nil {
 			return err
 		}
-		if c == '\n' || c == '\r' {
+		// 跳过\n\r
+		if bytes.ContainsAny([]byte{c}, "\r\n") {
 			continue
 		}
 		T.bufr.UnreadByte()
 		break
-	}
-
-	if d := T.server.idleTimeout(); d != 0 {
-		T.rwc.SetReadDeadline(first.Add(d))
 	}
 	if _, err := T.bufr.Peek(4); err != nil {
 		return err

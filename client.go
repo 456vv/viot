@@ -49,7 +49,7 @@ func (T *Client) GetCtx(ctx context.Context, urlstr string, header Header) (resp
 //	resp *Response			响应
 //	err error				错误
 func (T *Client) Do(req *Request) (resp *Response, err error) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(req.Context())
 	defer cancel()
 	return T.DoCtx(ctx, req)
 }
@@ -111,18 +111,26 @@ func (T *Client) DoCtx(ctx context.Context, req *Request) (resp *Response, err e
 		return nil, err
 	}
 
+	vc, vcOk := netConn.(vconnpool.Conn) // 判断有没有 Discard 接口
+
 	// 客户端不需要这条连接，不回收到池中
 	if req.wantsClose() || req.Close {
-		if cp, ok := netConn.(vconnpool.Conn); ok {
-			cp.Discard()
+		if vcOk {
+			vc.Discard()
 		}
 	}
 
-	defer netConn.Close()
+	// 上下文退出
 	go func() {
+		defer netConn.Close()
 		select {
 		case <-ctx.Done():
-			netConn.Close()
+			netConn.SetDeadline(aLongTimeAgo)
+			// 超时的连接不加入到池，因为服务端依然向该连接写入数据。
+			// 下次使用该连接将会读取到上次的数据
+			if vcOk {
+				vc.Discard()
+			}
 		case <-done:
 		}
 	}()
@@ -148,8 +156,8 @@ func (T *Client) DoCtx(ctx context.Context, req *Request) (resp *Response, err e
 	resp, err = ReadResponse(netConn, req)
 	// 服务器已经关闭连接，不回收到池中
 	if err != nil || resp.Close {
-		if cp, ok := netConn.(vconnpool.Conn); ok {
-			cp.Discard()
+		if vcOk {
+			vc.Discard()
 		}
 	}
 
