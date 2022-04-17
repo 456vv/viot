@@ -49,7 +49,7 @@ func (T *Client) GetCtx(ctx context.Context, urlstr string, header Header) (resp
 //	resp *Response			响应
 //	err error				错误
 func (T *Client) Do(req *Request) (resp *Response, err error) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(req.Context())
 	defer cancel()
 	return T.DoCtx(ctx, req)
 }
@@ -122,7 +122,7 @@ func (T *Client) DoCtx(ctx context.Context, req *Request) (resp *Response, err e
 	go func() {
 		select {
 		case <-ctx.Done():
-			netConn.Close()
+			netConn.SetDeadline(aLongTimeAgo)
 		case <-done:
 		}
 	}()
