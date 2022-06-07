@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"sync"
@@ -51,17 +50,16 @@ const (
 // 服务器
 type Server struct {
 	Addr              string                                                             // 如果空，TCP监听的地址是，“:8000”
-	Handler           Handler                                                            // 如果nil，处理器调用，http.DefaultServeMux
+	Handler           Handler                                                            // 如果nil，没有调用
 	BaseContext       func(net.Listener) context.Context                                 // 监听上下文
 	ConnContext       func(context.Context, net.Conn) (context.Context, net.Conn, error) // 连接钩子
 	ConnState         func(net.Conn, ConnState)                                          // 每一个连接跟踪
-	HandlerRequest    func(b io.Reader) (req *Request, err error)                        // 处理请求
-	HandlerResponse   func(b io.Reader) (res *Response, err error)                       // 处理响应
 	ErrorLog          *log.Logger                                                        // 错误？默认是 os.Stderr
 	ErrorLogLevel     LogLevel                                                           // 日志错误级别
 	ReadTimeout       time.Duration                                                      // 求读取之前，最长期限超时
 	WriteTimeout      time.Duration                                                      // 响应写入之前，最大持续时间超时
 	IdleTimeout       time.Duration                                                      // 空闲时间，等待用户重新请求
+	TLSConfig         *tls.Config                                                        // 可选配置TLS，用于ListenAndServeTLS
 	TLSNextProto      map[string]func(*Server, *tls.Conn, Handler)                       // TLS劫持，["v3"]=function(自身, TLS连接, Handler)
 	MaxLineBytes      int                                                                // 限制读取行数据大小
 	disableKeepAlives int32                                                              // 禁止长连接
@@ -108,17 +106,13 @@ func (T *Server) trackListener(ln *net.Listener, add bool) bool {
 		T.listeners = make(map[*net.Listener]struct{})
 	}
 	if add {
+		// 服务已经下线
 		if T.shuttingDown() {
 			return false
 		}
 		T.listeners[ln] = struct{}{}
 	} else {
-
 		delete(T.listeners, ln)
-
-		if len(T.listeners) == 0 && len(T.activeConn) == 0 {
-			T.doneChan = nil
-		}
 	}
 	return true
 }
@@ -174,6 +168,28 @@ func (T *Server) ListenAndServe() error {
 		return err
 	}
 	return T.Serve(ln)
+}
+
+// 服务器监听TLS
+//	l net.Listener				监听
+//	certFile, keyFile string	证书公钥，私钥
+//	error						错误
+func (T *Server) ServeTLS(l net.Listener, certFile, keyFile string) error {
+	config := cloneTLSConfig(T.TLSConfig)
+	if !strSliceContains(config.NextProtos, "IOT/1.1") {
+		config.NextProtos = append(config.NextProtos, "IOT/1.1")
+	}
+	configHasCer := len(config.Certificates) > 0 || config.GetCertificate != nil
+	if !configHasCer || certFile != "" || keyFile != "" {
+		var err error
+		config.Certificates = make([]tls.Certificate, 1)
+		config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return err
+		}
+	}
+	tlsListener := tls.NewListener(l, config)
+	return T.Serve(tlsListener)
 }
 
 // 服务器监听
@@ -315,14 +331,6 @@ func (T *Server) logf(level LogLevel, format string, v ...interface{}) {
 		}
 		log.Print(txt)
 	}
-}
-
-func (T *Server) logDebugReadData(addr string, b interface{}) {
-	T.logf(LogDebug, "viot: 从IP(%s)读取数据:\n%s", addr, b)
-}
-
-func (T *Server) logDebugWriteData(addr string, b interface{}) {
-	T.logf(LogDebug, "viot: 往IP(%s)写入数据:\n%s", addr, b)
 }
 
 // 判断服务器是否支持长连接

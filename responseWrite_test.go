@@ -1,41 +1,37 @@
 package viot
-	
-import(
-	"testing"
+
+import (
+	"bufio"
 	"bytes"
 	"encoding/json"
-	"bufio"
+	"testing"
 )
 
-
 func Test_response_bodyAllowed(t *testing.T) {
-	
-	tests := []struct{
-		status	int
-		result	bool
+	tests := []struct {
+		status int
+		result bool
 	}{
-		{status:100, result: false},//>=100
-		{status:199, result: false},//<=199
-		{status:200, result: true},
-		{status:204, result: false},
-		{status:304, result: false},
-		{status:500, result: true},
+		{status: 100, result: false}, //>=100
+		{status: 199, result: false}, //<=199
+		{status: 200, result: true},
+		{status: 204, result: false},
+		{status: 304, result: false},
+		{status: 500, result: true},
 	}
 	for index, test := range tests {
 		res := &responseWrite{
 			status: test.status,
 		}
 		if res.bodyAllowed() != test.result {
-			t.Fatalf("%d, 状态 %v, 预测 %v, 错误 %v", index, test.status, test.result, res.bodyAllowed(),)
+			t.Fatalf("%d, 状态 %v, 预测 %v, 错误 %v", index, test.status, test.result, res.bodyAllowed())
 		}
-	
+
 	}
 }
 
-
 func Test_response_Header(t *testing.T) {
-	res := &responseWrite{
-	}
+	res := &responseWrite{}
 	if res.header != nil {
 		t.Fatal("错误：.header 不是 nil")
 	}
@@ -43,16 +39,12 @@ func Test_response_Header(t *testing.T) {
 	if res.header == nil {
 		t.Fatal("错误：.header 是 nil")
 	}
-
 }
-
 
 func Test_response_Status(t *testing.T) {
 	res := &responseWrite{
 		conn: &conn{
-			server: &Server{
-				
-			},
+			server: &Server{},
 		},
 	}
 	if res.status != 0 {
@@ -68,22 +60,19 @@ func Test_response_Status(t *testing.T) {
 	if res.status != 200 {
 		t.Fatal("错误：.status 不是 200")
 	}
-	
-
 }
 
 func Test_response_SetBody(t *testing.T) {
-
 	bytesBuffer := bytes.NewBuffer(nil)
 	res := &responseWrite{
 		conn: &conn{
-			server	: &Server{},
-			bufw	: bufio.NewWriter(bytesBuffer),
+			server: &Server{},
+			bufw:   bufio.NewWriter(bytesBuffer),
+			parser: new(defaultParse),
 		},
-		req: &Request{
-		},
+		req: &Request{},
 	}
-	res.dw = dataWriter{res:res}
+	res.dw = dataWriter{res: res}
 	res.SetBody([1]int{1})
 	err := res.done()
 	if err != nil {
@@ -113,20 +102,20 @@ func Test_response_done(t *testing.T) {
 	bytesBuffer := bytes.NewBuffer(nil)
 	res := &responseWrite{
 		conn: &conn{
-			server	: &Server{},
-			bufw	: bufio.NewWriter(bytesBuffer),
+			server: &Server{},
+			bufw:   bufio.NewWriter(bytesBuffer),
+			parser: new(defaultParse),
 		},
-		req: &Request{
-		},
+		req: &Request{},
 	}
-	res.dw = dataWriter{res:res}
-	
+	res.dw = dataWriter{res: res}
+
 	if res.handlerDone.isTrue() {
 		t.Fatalf("错误：handlerDone 是 true")
 	}
-	
+
 	res.done()
-	
+
 	if !res.handlerDone.isTrue() {
 		t.Fatalf("错误：handlerDone 是 false")
 	}
@@ -147,21 +136,4 @@ func Test_response_done(t *testing.T) {
 	if ir.Body != nil {
 		t.Fatalf("错误：Body 不是 nil")
 	}
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

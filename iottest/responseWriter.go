@@ -15,20 +15,11 @@ type ResponseWrite struct {
 	HeaderMap viot.Header
 	Body      interface{}
 
-	//服务端的连接
-	conn net.Conn
+	// 服务端的连接
+	connHijack     net.Conn
+	funcRawControl func(net.Conn, *bufio.Reader) error
 
 	rr func(*viot.Request) (*viot.Response, error)
-}
-
-func (T *ResponseWrite) HookHijack(client func(net.Conn)) {
-	tcptest.C2S("127.0.0.1:0", func(c net.Conn) {
-		T.conn = c
-	}, client)
-}
-
-func (T *ResponseWrite) HookRoundTrip(rr func(*viot.Request) (*viot.Response, error)) {
-	T.rr = rr
 }
 
 func (T *ResponseWrite) Flush() {}
@@ -64,13 +55,19 @@ func (T *ResponseWrite) Result() *viot.Response {
 }
 
 func (T *ResponseWrite) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	vc := vconn.NewConn(T.conn)
-	return vc, bufio.NewReadWriter(bufio.NewReader(vc), bufio.NewWriter(T.conn)), nil
+	vc := vconn.New(T.connHijack)
+	return vc, bufio.NewReadWriter(bufio.NewReader(vc), bufio.NewWriter(T.connHijack)), nil
+}
+
+func (T *ResponseWrite) DebugHijack(client func(net.Conn)) {
+	tcptest.C2S("127.0.0.1:0", func(c net.Conn) {
+		T.connHijack = c
+	}, client)
 }
 
 func (T *ResponseWrite) Write(buf []byte) (int, error) {
 	T.init()
-	return T.conn.Write(buf)
+	return T.connHijack.Write(buf)
 }
 
 func (T *ResponseWrite) WriteString(str string) (int, error) {
@@ -88,6 +85,24 @@ func (T *ResponseWrite) RoundTripContext(ctx context.Context, req *viot.Request)
 	return T.rr(req)
 }
 
+func (T *ResponseWrite) DebugRoundTrip(rr func(*viot.Request) (*viot.Response, error)) {
+	T.rr = rr
+}
+
 func (T *ResponseWrite) Launch() viot.RoundTripper {
 	return T
+}
+
+func (T *ResponseWrite) RawControl(f func(net.Conn, *bufio.Reader) error) {
+	T.funcRawControl = f
+}
+
+func (T *ResponseWrite) DebugRawControl(client func(net.Conn)) {
+	tcptest.C2S("127.0.0.1:0", func(c net.Conn) {
+		vc := vconn.New(c)
+		T.funcRawControl(vc, bufio.NewReader(vc))
+	}, client)
+}
+
+func (T *ResponseWrite) SetParse(p viot.Parser) {
 }

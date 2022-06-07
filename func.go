@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -470,4 +471,11 @@ func removeEmptyPort(host string) string {
 		return strings.TrimSuffix(host, ":")
 	}
 	return host
+}
+
+func cloneTLSConfig(cfg *tls.Config) *tls.Config {
+	if cfg == nil {
+		return &tls.Config{}
+	}
+	return cfg.Clone()
 }

@@ -54,16 +54,7 @@ func (T *Response) WriteAt(w ResponseWriter) {
 // 写入w
 //	w io.Writer		T响应写w
 func (T *Response) WriteTo(w io.Writer) (int64, error) {
-	if T.Request != nil && T.nonce == "" {
-		T.nonce = T.Request.nonce
-	}
-	ir := &ResponseConfig{
-		Nonce:  T.nonce,
-		Status: T.Status,
-		Header: T.Header.Clone(),
-		Body:   T.Body,
-	}
-	b, err := ir.Marshal()
+	b, err := T.Marshal()
 	if err != nil {
 		return 0, err
 	}
@@ -71,16 +62,28 @@ func (T *Response) WriteTo(w io.Writer) (int64, error) {
 	return int64(n), err
 }
 
+// 封装 ResponseConfig.Marshal
+func (T *Response) Marshal() ([]byte, error) {
+	if T.Request != nil && T.nonce == "" {
+		T.nonce = T.Request.nonce
+	}
+	rc, err := T.Config(T.nonce)
+	if err != nil {
+		return nil, err
+	}
+	return rc.Marshal()
+}
+
 // 转IOT支持的格式
 //	nonce string		编号
 //	riot *ResponseConfig	IOT响应数据格式
 //	err error			错误
-func (T *Response) ResponseConfig(nonce string) (riot *ResponseConfig, err error) {
-	ir := &ResponseConfig{
+func (T *Response) Config(nonce string) (rc *ResponseConfig, err error) {
+	rc = &ResponseConfig{
 		Nonce:  nonce,
 		Status: T.Status,
 		Header: T.Header.Clone(),
 		Body:   T.Body,
 	}
-	return ir, nil
+	return rc, nil
 }

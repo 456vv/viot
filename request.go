@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/456vv/vmap/v2"
 	"github.com/456vv/vweb/v2/builtin"
 )
 
@@ -79,7 +78,6 @@ type reqBody struct {
 }
 
 type Request struct {
-	nonce      string               // 编号
 	Host       string               // 身份
 	Method     string               // 方法
 	RequestURI string               // 请求URL
@@ -92,6 +90,7 @@ type Request struct {
 	RemoteAddr string               // 远程IP地址
 	Close      bool                 // 客户要求一次性连接
 
+	nonce     string             // 编号
 	bodyw     interface{}        // 写入的Body数据
 	bodyr     *bytes.Buffer      // 请求的数据(缓存让GetBody调用)
 	ctx       context.Context    // 上下文
@@ -148,7 +147,7 @@ func NewRequestWithContext(ctx context.Context, method, urlStr string, body inte
 				return nil, err
 			}
 			body = json.RawMessage(b)
-		case *vmap.Map:
+		case json.Marshaler:
 			b, err := v.MarshalJSON()
 			if err != nil {
 				return nil, err
@@ -274,14 +273,11 @@ func (T *Request) SetBasicAuth(username, password string) {
 //	token string	令牌
 func (T *Request) GetTokenAuth() string {
 	auth := T.Header.Get("Authorization")
-	if auth == "" {
-		return auth
+	prefix := "token "
+	if strings.HasPrefix(auth, prefix) {
+		return auth[len(prefix):]
 	}
-	const prefix = "token "
-	if !strings.HasPrefix(auth, prefix) {
-		return ""
-	}
-	return auth[len(prefix):]
+	return ""
 }
 
 // 设置token验证
@@ -290,11 +286,20 @@ func (T *Request) SetTokenAuth(token string) {
 	T.Header.Set("Authorization", "token "+token)
 }
 
+// 封装RequestConfig.Marshal
+func (T *Request) Marshal() ([]byte, error) {
+	rc, err := T.Config(T.nonce)
+	if err != nil {
+		return nil, err
+	}
+	return rc.Marshal()
+}
+
 // 请求，发往设备的请求
 //	nonce string		编号
 //	riot *RequestConfig	发往设备的请求
 //	err error			错误
-func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
+func (T *Request) Config(nonce string) (rc *RequestConfig, err error) {
 	host := T.Host
 	path := T.RequestURI
 	if T.URL != nil {
@@ -324,7 +329,7 @@ func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
 		return nil, ErrMethodInvalid
 	}
 
-	riot = &RequestConfig{
+	rc = &RequestConfig{
 		Nonce:  nonce,
 		Proto:  proto,
 		Method: T.Method,
@@ -334,13 +339,13 @@ func (T *Request) RequestConfig(nonce string) (riot *RequestConfig, err error) {
 	}
 
 	if T.Close {
-		riot.Header.Set("Connection", "close")
+		rc.Header.Set("Connection", "close")
 	}
 
 	// 如果没有另设置body，试试读取原有的body
 	if T.bodyw == nil {
 		T.GetBody(&T.bodyw)
 	}
-	riot.SetBody(&T.bodyw)
-	return riot, nil
+	rc.SetBody(T.bodyw)
+	return rc, nil
 }

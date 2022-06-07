@@ -35,14 +35,18 @@ type Launcher interface {
 
 // 源控制，用于临时处理原始数据
 type RawControler interface {
-	RawControl(f func(net.Conn, *bufio.Reader) error) // 返回错误关闭连接
+	RawControl(func(c net.Conn, r *bufio.Reader) error) // 返回错误关闭连接
+}
+
+// 源转换解析
+type SetParser interface {
+	SetParse(p Parser)
 }
 
 // 响应
 type responseWrite struct {
-	conn          *conn     // 上级
-	req           *Request  // 上级
-	closeNotifyCh chan bool // 收到数据，处理还没结束的时候。客户端又发来请求。则取消现有的请求，接受新的请求
+	conn *conn    // 上级
+	req  *Request // 上级
 
 	wroteStatus bool   // 状态写入
 	status      int    // 状态码
@@ -136,8 +140,7 @@ func (T *responseWrite) SetBody(data interface{}) error {
 	if !T.bodyAllowed() {
 		return ErrBodyNotAllowed
 	}
-
-	return T.dw.SetBody(data)
+	return T.dw.setBody(data)
 }
 
 // 读取关闭通知
@@ -146,7 +149,6 @@ func (T *responseWrite) CloseNotify() <-chan error {
 	if T.handlerDone.isTrue() {
 		panic("viot: response processing, Not allowed to call CloseNotify()")
 	}
-
 	return T.conn.vc.CloseNotify()
 }
 
@@ -180,5 +182,11 @@ func (T *responseWrite) Launch() RoundTripper {
 // 源连接控制
 //	f func(net.Conn, *bufio.Reader) error 控制函数，返回错误退出结束连接
 func (T *responseWrite) RawControl(f func(net.Conn, *bufio.Reader) error) {
-	T.conn.RawControl(f)
+	T.conn.rawControl(f)
+}
+
+// 原数据转换
+// p Parser 解析接口
+func (T *responseWrite) SetParse(p Parser) {
+	T.conn.setParse(p)
 }

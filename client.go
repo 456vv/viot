@@ -73,23 +73,8 @@ func (T *Client) DoCtx(ctx context.Context, req *Request) (resp *Response, err e
 		req.Host = T.Host
 	}
 
-	nonce := req.nonce
-	if nonce == "" {
-		// 生成编号
-		nonce, err = Nonce()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// 导出IOT支持的格式
-	riot, err := req.RequestConfig(nonce)
-	if err != nil {
-		return nil, err
-	}
-
 	// 转字节串
-	rbody, err := riot.Marshal()
+	rbody, err := req.Marshal()
 	if err != nil {
 		return nil, err
 	}

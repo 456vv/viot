@@ -43,39 +43,83 @@ func (T initNPNRequest) ServeIOT(rw ResponseWriter, req *Request) {
 
 // 连接
 type conn struct {
-	server     *Server                   // 上级，服务器
-	rwc        net.Conn                  // 上级，原始连接
-	ctx        context.Context           // 上下文
-	cancelCtx  context.CancelFunc        // 取消上下文
-	remoteAddr string                    // IP
-	tlsState   *tls.ConnectionState      // TLS状态
-	vc         *vconn.Conn               // 读取
-	bufr       *bufio.Reader             // 读缓冲
-	bufw       *bufio.Writer             // 写缓冲
-	curState   atomic.Value              // 当前的连接状态
-	mu         sync.Mutex                // 锁
-	hijackedv  atomicBool                // 劫持
-	activeReq  map[string]chan *Response // 主动请求
-	closed     bool                      // 关闭
-	handleFunc func(net.Conn, *bufio.Reader) error
+	server           *Server                   // 上级，服务器
+	rwc              net.Conn                  // 上级，原始连接
+	ctx              context.Context           // 上下文
+	cancelCtx        context.CancelFunc        // 取消上下文
+	remoteAddr       string                    // IP
+	tlsState         *tls.ConnectionState      // TLS状态
+	vc               *vconn.Conn               // 读取
+	bufr             *bufio.Reader             // 读缓冲
+	bufw             *bufio.Writer             // 写缓冲
+	curState         atomic.Value              // 当前的连接状态
+	mu               sync.Mutex                // 锁
+	hijackedv        atomicBool                // 劫持
+	activeReq        map[string]chan *Response // 主动请求
+	closed           bool                      // 关闭
+	handleFunc       func(net.Conn, *bufio.Reader) error
+	parser           Parser
+	parserWaitChange Parser
 }
 
-func (T *conn) RawControl(f func(net.Conn, *bufio.Reader) error) error {
+func (T *conn) setParse(p Parser) {
+	T.parserWaitChange = p
+}
+
+func (T *conn) parserChange() {
+	if T.parserWaitChange == nil {
+		if _, ok := T.parser.(*defaultParse); !ok {
+			T.parser = new(defaultParse)
+		}
+		return
+	}
+	// 警告：
+	// 因为上面他需要初始创建一个解析接口
+	// 不要移动到上面，就在这里。
+	if T.parserWaitChange == T.parser {
+		return
+	}
+	T.parser = T.parserWaitChange
+}
+
+func (T *conn) rawControl(f func(net.Conn, *bufio.Reader) error) error {
 	if T.closed {
 		return ErrConnClose
 	}
 
-	// 判断劫持
 	if T.hijackedv.isTrue() {
 		return ErrHijacked
 	}
 
-	T.handleFunc = f
+	if T.handleFunc != nil {
+		return ErrRwaControl
+	}
+
+	T.handleFunc = func(c net.Conn, r *bufio.Reader) error {
+		T.mu.Lock()
+		defer T.mu.Unlock()
+		T.handleFunc = nil
+		return f(c, r)
+	}
 	return nil
 }
 
+func (T *conn) callRawControl() bool {
+	if hf := T.handleFunc; hf != nil {
+		if err := hf(T.vc, T.bufr); err != nil {
+			T.server.logf(LogErr, "viot: 从IP(%v)处理原始数据错误:%v", T.remoteAddr, err)
+			return false
+		}
+		if err := T.idleWait(); err != nil {
+			// 等待数据，读取超时就退出
+			return false
+		}
+	}
+	return true
+}
+
 // 劫持连接
-func (T *conn) hijackLocked() (vc net.Conn, buf *bufio.ReadWriter, err error) {
+func (T *conn) hijackLocked() (conn net.Conn, buf *bufio.ReadWriter, err error) {
 	T.mu.Lock()
 	defer T.mu.Unlock()
 
@@ -88,23 +132,18 @@ func (T *conn) hijackLocked() (vc net.Conn, buf *bufio.ReadWriter, err error) {
 		return nil, nil, ErrLaunched
 	}
 
-	// 判断劫持
-	if T.hijackedv.isTrue() {
-		return nil, nil, ErrHijacked
-	}
-
 	// 处理原始数据，防止冲突
 	if T.handleFunc != nil {
 		return nil, nil, ErrRwaControl
 	}
-	// 设置劫持
-	T.hijackedv.setTrue()
+
+	// 判断劫持
+	if T.hijackedv.setTrue() {
+		return nil, nil, ErrHijacked
+	}
 
 	// 支持后台读取，判断连接断开通知
-	T.vc.DisableBackgroundRead(false)
-	// 退出空闲读取idleWait
-	T.vc.SetReadDeadline(aLongTimeAgo)
-	T.vc.SetReadDeadline(time.Time{})
+	T.vc.DisableBackgroundRead(true)
 
 	T.setState(StateHijacked)
 
@@ -150,35 +189,16 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		T.activeReq = make(map[string]chan *Response)
 	}
 
-	// 防止踩到狗屎运
-	var nonce string
-	for i := 0; i < 100; i++ {
-		nonce, err = Nonce()
-		if err != nil {
-			return nil, err
-		}
-		if _, ok := T.activeReq[nonce]; !ok {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-
-	// 导出设备支持的请求格式
-	riot, err := req.RequestConfig(nonce)
-	if err != nil {
-		return nil, err
-	}
-
 	// 设备支持的请求格式转字节
-	reqByte, err := riot.Marshal()
+	reqByte, err := T.parser.Unrequest(req)
 	if err != nil {
 		return nil, err
 	}
 
 	done := make(chan *Response)
-	T.activeReq[nonce] = done
+	T.activeReq[req.nonce] = done
 	defer close(done)
-	defer delete(T.activeReq, nonce)
+	defer delete(T.activeReq, req.nonce)
 
 	if err = T.writeLineByte(reqByte); err != nil {
 		return nil, err
@@ -216,6 +236,18 @@ func (T *conn) RoundTripContext(ctx context.Context, req *Request) (resp *Respon
 		// 设备返回一个响应
 		res.Request = req
 		return res, nil
+	}
+}
+
+func (T *conn) roundTripReceive(resp *Response) {
+	T.mu.Lock()
+	defer T.mu.Unlock()
+	T.setState(StateActive)
+	if cres, ok := T.activeReq[resp.nonce]; ok {
+		select {
+		case cres <- resp:
+		default:
+		}
 	}
 }
 
@@ -273,28 +305,7 @@ func (T *conn) readResponse(ctx context.Context, lineBytes []byte) (res *Respons
 	if T.hijackedv.isTrue() {
 		return nil, ErrHijacked
 	}
-
-	// 使用外部解析函数
-	var externalHandle bool
-	if hr := T.server.HandlerResponse; hr != nil {
-		br := bytes.NewReader(lineBytes)
-		res, err = hr(br)
-		if err != nil && err != ErrReqUnavailable {
-			// 其它错误
-			return
-		}
-		externalHandle = true
-	}
-	// 1，没有外部处理
-	// 2，外部处理无法识别
-	if !externalHandle || err == ErrReqUnavailable {
-		if !isResponse(lineBytes) {
-			return nil, ErrRespUnavailable
-		}
-		br := bytes.NewReader(lineBytes)
-		res, err = readResponse(br)
-	}
-	return
+	return T.parser.Response(lineBytes)
 }
 
 // 解析请求
@@ -302,30 +313,10 @@ func (T *conn) readRequest(ctx context.Context, lineBytes []byte) (req *Request,
 	if T.hijackedv.isTrue() {
 		return nil, ErrHijacked
 	}
-	// 使用外部解析函数
-	var externalHandle bool
-	if hr := T.server.HandlerRequest; hr != nil {
-		br := bytes.NewReader(lineBytes)
-		req, err = hr(br)
-		if err != nil && err != ErrReqUnavailable {
-			// 其它错误
-			return
-		}
-		externalHandle = true
-	}
 
-	// 1，没有外部处理
-	// 2，外部处理无法识别
-	if !externalHandle || err == ErrReqUnavailable {
-		if !isRequest(lineBytes) {
-			return nil, ErrReqUnavailable
-		}
-
-		br := bytes.NewReader(lineBytes)
-		req, err = readRequest(br)
-		if err != nil {
-			return nil, err
-		}
+	req, err = T.parser.Request(lineBytes)
+	if err != nil {
+		return nil, err
 	}
 
 	if req.ProtoMajor != 1 {
@@ -344,8 +335,6 @@ func (T *conn) readRequest(ctx context.Context, lineBytes []byte) (req *Request,
 
 // 服务
 func (T *conn) serve(ctx context.Context) {
-	T.remoteAddr = T.rwc.RemoteAddr().String()
-	ctx = context.WithValue(ctx, LocalAddrContextKey, T.rwc.LocalAddr())
 	defer func() {
 		if err := recover(); err != nil && err != ErrAbortHandler {
 			const size = 64 << 10
@@ -358,9 +347,17 @@ func (T *conn) serve(ctx context.Context) {
 			return
 		}
 		T.server.logf(LogDebug, "viot: 自IP(%s)断开网络", T.remoteAddr)
-		T.Close()
+		T.close()
 	}()
+
 	T.server.logf(LogDebug, "viot: 自IP(%s)连接网络", T.remoteAddr)
+
+	// 连接的上下文
+	ctx = context.WithValue(ctx, LocalAddrContextKey, T.rwc.LocalAddr())
+	T.ctx, T.cancelCtx = context.WithCancel(ctx)
+	defer T.cancelCtx()
+
+	T.remoteAddr = T.rwc.RemoteAddr().String()
 
 	if tlsConn, ok := T.rwc.(*tls.Conn); ok {
 		if d := T.server.ReadTimeout; d != 0 {
@@ -387,15 +384,9 @@ func (T *conn) serve(ctx context.Context) {
 		}
 	}
 
-	// JSON格式
 	T.vc = vconn.New(T.rwc)
-	T.vc.DisableBackgroundRead(true)
 	T.bufr = newBufioReader(T.vc)
 	T.bufw = newBufioWriterSize(T.vc, 4<<10)
-
-	// 连接的上下文
-	T.ctx, T.cancelCtx = context.WithCancel(ctx)
-	defer T.cancelCtx()
 
 	for {
 		if T.server.shuttingDown() {
@@ -403,18 +394,14 @@ func (T *conn) serve(ctx context.Context) {
 			return
 		}
 
-		// 自定义连接处理函数
-		if hf := T.handleFunc; hf != nil && !T.inLaunch() {
-			if err := hf(T.vc, T.bufr); err != nil {
-				T.server.logf(LogErr, "viot: 从IP(%v)处理原始数据错误:%v", T.remoteAddr, err)
+		if !T.inLaunch() {
+			// 内部创建解析接口
+			T.parserChange()
+
+			// 自定义数据流处理函数
+			if !T.callRawControl() {
 				return
 			}
-			T.handleFunc = nil
-			if err := T.idleWait(); err != nil {
-				// 等待数据，读取超时就退出
-				return
-			}
-			continue
 		}
 
 		lineBytes, err := T.readLineBytes()
@@ -436,31 +423,21 @@ func (T *conn) serve(ctx context.Context) {
 		// 设备发来请求，等待服务器响应信息
 		req, err := T.readRequest(T.ctx, lineBytes)
 		// 不是有效请求
-		if err == ErrReqUnavailable {
-			if T.inLaunch() {
-				res, err := T.readResponse(T.ctx, lineBytes)
-				if err != nil {
-					T.logErrReceive(err)
-					// 不能识别的数据
-					return
-				}
-
-				T.setState(StateActive)
-				T.mu.Lock()
-				if cres, ok := T.activeReq[res.nonce]; ok {
-					select {
-					case cres <- res:
-					default:
-					}
-				}
-				T.mu.Unlock()
+		if err == ErrReqUnavailable && T.inLaunch() {
+			res, err := T.readResponse(T.ctx, lineBytes)
+			if err != nil {
+				T.logErrReceive(err)
+				// 不能识别的数据
+				return
 			}
+
+			// 给使用者返回响应
+			T.roundTripReceive(res)
 
 			if err = T.idleWait(); err != nil {
 				// 等待数据，读取超时就退出
 				return
 			}
-
 			continue
 		}
 		if err != nil {
@@ -525,7 +502,7 @@ func (T *conn) setState(state ConnState) {
 	case StateHijacked, StateClosed:
 		T.server.trackConn(T, false)
 	}
-	T.curState.Store(connStateInterface[state])
+	T.curState.Store(state)
 	if hook := T.server.ConnState; hook != nil {
 		hook(T.rwc, state)
 	}
@@ -551,14 +528,6 @@ var stateName = map[ConnState]string{
 
 func (c ConnState) String() string {
 	return stateName[c]
-}
-
-var connStateInterface = [...]interface{}{
-	StateNew:      StateNew,
-	StateActive:   StateActive,
-	StateIdle:     StateIdle,
-	StateHijacked: StateHijacked,
-	StateClosed:   StateClosed,
 }
 
 // 空闲等待，自动处理多余的换行符
@@ -621,7 +590,7 @@ func (T *conn) closeWriteAndWait() {
 }
 
 // 关闭连接
-func (T *conn) Close() error {
+func (T *conn) close() error {
 	// 需要上锁，否则会清空T.bufr 或 T.bufw
 	T.mu.Lock()
 	defer T.mu.Unlock()
@@ -638,11 +607,11 @@ func (T *conn) Close() error {
 }
 
 func (T *conn) logDebugWriteData(a interface{}) {
-	T.server.logDebugWriteData(T.remoteAddr, a)
+	T.server.logf(LogDebug, "viot: 往IP(%s)写入数据:\n%s", T.remoteAddr, a)
 }
 
 func (T *conn) logDebugReadData(a interface{}) {
-	T.server.logDebugReadData(T.remoteAddr, a)
+	T.server.logf(LogDebug, "viot: 从IP(%s)读取数据:\n%s", T.remoteAddr, a)
 }
 
 func (T *conn) logErrReceive(err error) {

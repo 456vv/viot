@@ -1,37 +1,38 @@
 package viot
-	
-import(
+
+import (
 	"testing"
-//	"context"
-//	"net/http"
-	"reflect"
+	//	"context"
+	//	"net/http"
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"reflect"
+
+	"github.com/issue9/assert/v2"
 )
 
-
 func Test_dataWriter_generateResponse(t *testing.T) {
-	tests := []struct{
-		SetKeepAlivesEnabled bool
-		SetKeepAlivesEnabledString	string
-			
+	tests := []struct {
+		SetKeepAlivesEnabled       bool
+		SetKeepAlivesEnabledString string
+
 		nonce string
-			
-		ProtoMajor	int
-		ProtoMinor	int
-			
+
+		ProtoMajor int
+		ProtoMinor int
+
 		closeAfterReply bool
-		header	Header
+		header          Header
 	}{
-		{SetKeepAlivesEnabled:true, SetKeepAlivesEnabledString: "keep-alive", nonce:"1", ProtoMajor:1, ProtoMinor:1, closeAfterReply:false, header:Header{"Connection":"keep-alive"}},
-		{SetKeepAlivesEnabled:true, SetKeepAlivesEnabledString: "close", nonce:"5", ProtoMajor:1, ProtoMinor:1, closeAfterReply:true, header:Header{"Connection":"close"}},
-		{SetKeepAlivesEnabled:true, SetKeepAlivesEnabledString: "close", nonce:"5", ProtoMajor:1, ProtoMinor:0, closeAfterReply:true, header:Header{"Connection":"keep-alive"}},
-		{SetKeepAlivesEnabled:true, SetKeepAlivesEnabledString: "close", nonce:"5", ProtoMajor:1, ProtoMinor:0, closeAfterReply:true, header:Header{"Connection":"close"}},
-		{SetKeepAlivesEnabled:false, SetKeepAlivesEnabledString: "close", nonce:"2", ProtoMajor:1, ProtoMinor:0, closeAfterReply:true, header:Header{"Connection":"close"}},
-		{SetKeepAlivesEnabled:false, SetKeepAlivesEnabledString: "close", nonce:"2", ProtoMajor:1, ProtoMinor:0, closeAfterReply:true, header:Header{"Connection":"keep-alive"}},
-		{SetKeepAlivesEnabled:false, SetKeepAlivesEnabledString: "close", nonce:"2", ProtoMajor:1, ProtoMinor:1, closeAfterReply:true, header:Header{"Connection":"close"}},
-		{SetKeepAlivesEnabled:false, SetKeepAlivesEnabledString: "close", nonce:"2", ProtoMajor:1, ProtoMinor:1, closeAfterReply:true, header:Header{"Connection":"keep-alive"}},
+		{SetKeepAlivesEnabled: true, SetKeepAlivesEnabledString: "keep-alive", nonce: "1", ProtoMajor: 1, ProtoMinor: 1, closeAfterReply: false, header: Header{"Connection": "keep-alive"}},
+		{SetKeepAlivesEnabled: true, SetKeepAlivesEnabledString: "close", nonce: "5", ProtoMajor: 1, ProtoMinor: 1, closeAfterReply: true, header: Header{"Connection": "close"}},
+		{SetKeepAlivesEnabled: true, SetKeepAlivesEnabledString: "close", nonce: "5", ProtoMajor: 1, ProtoMinor: 0, closeAfterReply: true, header: Header{"Connection": "keep-alive"}},
+		{SetKeepAlivesEnabled: true, SetKeepAlivesEnabledString: "close", nonce: "5", ProtoMajor: 1, ProtoMinor: 0, closeAfterReply: true, header: Header{"Connection": "close"}},
+		{SetKeepAlivesEnabled: false, SetKeepAlivesEnabledString: "close", nonce: "2", ProtoMajor: 1, ProtoMinor: 0, closeAfterReply: true, header: Header{"Connection": "close"}},
+		{SetKeepAlivesEnabled: false, SetKeepAlivesEnabledString: "close", nonce: "2", ProtoMajor: 1, ProtoMinor: 0, closeAfterReply: true, header: Header{"Connection": "keep-alive"}},
+		{SetKeepAlivesEnabled: false, SetKeepAlivesEnabledString: "close", nonce: "2", ProtoMajor: 1, ProtoMinor: 1, closeAfterReply: true, header: Header{"Connection": "close"}},
+		{SetKeepAlivesEnabled: false, SetKeepAlivesEnabledString: "close", nonce: "2", ProtoMajor: 1, ProtoMinor: 1, closeAfterReply: true, header: Header{"Connection": "keep-alive"}},
 	}
 	for index, test := range tests {
 		cw := &dataWriter{
@@ -40,18 +41,18 @@ func Test_dataWriter_generateResponse(t *testing.T) {
 					server: &Server{},
 				},
 				req: &Request{
-					nonce		: test.nonce,
-					ProtoMajor	: test.ProtoMajor,
-					ProtoMinor	: test.ProtoMinor,
-					Header		: test.header,
+					nonce:      test.nonce,
+					ProtoMajor: test.ProtoMajor,
+					ProtoMinor: test.ProtoMinor,
+					Header:     test.header,
 				},
 			},
 		}
 		cw.res.conn.server.SetKeepAlivesEnabled(test.SetKeepAlivesEnabled)
 		cw.generateResponse()
-		
+
 		if test.SetKeepAlivesEnabled {
-			conn := cw.data.Header.Get("Connection")
+			conn := cw.resp.Header.Get("Connection")
 			if conn != test.SetKeepAlivesEnabledString {
 				t.Fatalf("%v, 预测 %v, 错误 %v", index, test.SetKeepAlivesEnabledString, conn)
 			}
@@ -59,135 +60,60 @@ func Test_dataWriter_generateResponse(t *testing.T) {
 		if test.closeAfterReply != cw.res.closeAfterReply {
 			t.Fatalf("%v, 预测 %v, 错误 %v", index, test.closeAfterReply, cw.res.closeAfterReply)
 		}
-		if !reflect.DeepEqual(test.nonce, cw.data.Nonce) {
-			t.Fatalf("%v, 预测 %v, 错误 %v", index, test.nonce, cw.data.Nonce)
+		if !reflect.DeepEqual(test.nonce, cw.resp.nonce) {
+			t.Fatalf("%v, 预测 %v, 错误 %v", index, test.nonce, cw.resp.nonce)
 		}
-		//t.Log(cw.data)
 	}
 }
 
 func Test_dataWriter_Body(t *testing.T) {
+	as := assert.New(t, true)
 	bytesBuffer := bytes.NewBuffer(nil)
 	cw := &dataWriter{
 		res: &responseWrite{
 			conn: &conn{
-				server	: &Server{},
-				bufw	: bufio.NewWriter(bytesBuffer),
+				server: &Server{},
+				bufw:   bufio.NewWriter(bytesBuffer),
+				parser: &defaultParse{},
 			},
-			req: &Request{
-			},
+			req: &Request{},
 		},
 	}
-	cw.SetBody([1]int{1})
+	cw.setBody([1]int{1})
 	err := cw.done()
-	if err != nil {
-		t.Fatal(err)
-	}
-	cw.res.conn.bufw.Flush()
-	
-	var ir ResponseConfig
-	err = json.NewDecoder(bytesBuffer).Decode(&ir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ir.Nonce != "" {
-		t.Fatalf("预测 \"\", 错误 %v", ir.Nonce)
-	}
-	if ir.Header == nil {
-		t.Fatalf("错误：Header 是 nil")
-	}
-	if ir.Status != 200 {
-		t.Fatalf("预测 %v, 错误 %v", 200, ir.Status)
-	}
-	if ir.Body == nil {
-		t.Fatalf("错误：Body 是 nil")
-	}
+	as.NotError(err)
+
+	var rc ResponseConfig
+	err = json.NewDecoder(bytesBuffer).Decode(&rc)
+	as.NotError(err)
+	as.Equal(rc.Nonce, "")
+	as.NotEqual(rc.Header, nil)
+	as.Equal(rc.Status, 200)
+	as.NotEqual(rc.Body, nil)
 }
 
 func Test_dataWriter_done(t *testing.T) {
+	as := assert.New(t, true)
 	bytesBuffer := bytes.NewBuffer(nil)
 	cw := &dataWriter{
 		res: &responseWrite{
 			conn: &conn{
-				server	: &Server{},
-				bufw	: bufio.NewWriter(bytesBuffer),
+				server: &Server{},
+				bufw:   bufio.NewWriter(bytesBuffer),
+				parser: &defaultParse{},
 			},
-			req: &Request{
-			},
+			req: &Request{},
 		},
 	}
+
 	err := cw.done()
-	if err != nil {
-		t.Fatal(err)
-	}
-	cw.res.conn.bufw.Flush()
-	
-	var ir ResponseConfig
-	err = json.NewDecoder(bytesBuffer).Decode(&ir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ir.Nonce != "" {
-		t.Fatalf("预测 \"\", 错误 %v", ir.Nonce)
-	}
-	if ir.Header == nil {
-		t.Fatalf("错误：Header 是 nil")
-	}
-	if ir.Status != 200 {
-		t.Fatalf("预测 %v, 错误 %v", 200, ir.Status)
-	}
-	if ir.Body != nil {
-		t.Fatalf("错误：Body 不为 nil")
-	}
+	as.NotError(err)
+
+	var rc ResponseConfig
+	err = json.NewDecoder(bytesBuffer).Decode(&rc)
+	as.NotError(err)
+	as.Equal(rc.Nonce, "")
+	as.NotEqual(rc.Header, nil)
+	as.Equal(rc.Status, 200)
+	as.Equal(rc.Body, nil)
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

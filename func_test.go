@@ -201,7 +201,7 @@ func Test_readResponse_1(t *testing.T) {
 		req, err := NewRequest("GET", "iot://lh/", nil)
 		as.NotError(err)
 
-		rc, err := req.RequestConfig("1234567890")
+		rc, err := req.Config("1234567890")
 		as.NotError(err)
 
 		b, err := rc.Marshal()
