@@ -51,6 +51,7 @@ const (
 type Server struct {
 	Addr              string                                                             // 如果空，TCP监听的地址是，“:8000”
 	Handler           Handler                                                            // 如果nil，没有调用
+	Parser            Parser                                                             // 自定义解析
 	BaseContext       func(net.Listener) context.Context                                 // 监听上下文
 	ConnContext       func(context.Context, net.Conn) (context.Context, net.Conn, error) // 连接钩子
 	ConnState         func(net.Conn, ConnState)                                          // 每一个连接跟踪
@@ -248,7 +249,7 @@ func (T *Server) Serve(l net.Listener) error {
 					return
 				}
 			}
-			c := &conn{server: T, rwc: nrw}
+			c := &conn{server: T, rwc: nrw, parserWaitChange: T.Parser}
 			c.setState(StateNew)
 			c.serve(connCtx)
 		}(ctx, rw)
