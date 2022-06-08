@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"strings"
 	"sync"
@@ -28,14 +27,15 @@ func Test_conn_readLineBytes(t *testing.T) {
 	}
 	str := strings.Join(ss, "\n")
 
-	tcptest.C2S("127.0.0.1:0", func(netConn net.Conn) {
+	tcptest.C2S("127.0.0.1:0", func(nc net.Conn) {
 		c := &conn{
 			server: &Server{
 				ReadTimeout:  time.Second,
 				WriteTimeout: 0,
 			},
-			rwc: netConn,
+			rwc: nc,
 		}
+		defer c.close()
 
 		c.vc = vconn.New(c.rwc)
 		c.bufr = newBufioReader(c.vc)
@@ -54,15 +54,12 @@ func Test_conn_readLineBytes(t *testing.T) {
 			as.Equal(lb, []byte(ss[index]))
 			index++
 		}
-
-		c.close()
-	}, func(netConn net.Conn) {
+	}, func(conn net.Conn) {
 		b := []byte(str)
-		n, err := netConn.Write(b)
+		n, err := conn.Write(b)
 		as.NotError(err).Equal(n, len(b))
 
-		io.Copy(ioutil.Discard, netConn)
-		netConn.Close()
+		io.Copy(io.Discard, conn)
 	})
 }
 
@@ -82,6 +79,7 @@ func Test_conn_readRequest(t *testing.T) {
 			},
 			rwc: netConn,
 		}
+		defer c.close()
 
 		c.vc = vconn.New(c.rwc)
 		c.bufr = newBufioReader(c.vc)
@@ -90,7 +88,6 @@ func Test_conn_readRequest(t *testing.T) {
 
 		var index int
 		for {
-			c.parserChange()
 			lb, err := c.readLineBytes()
 			if err != nil {
 				if isCommonNetReadError(err) {
@@ -102,11 +99,11 @@ func Test_conn_readRequest(t *testing.T) {
 
 			index++
 
+			c.parserChange()
 			req, err := c.readRequest(c.ctx, lb)
 			as.NotError(err)
 			as.Equal(req.nonce, fmt.Sprintf("%d", index))
 		}
-		c.close()
 	}, func(netConn net.Conn) {
 		_, err := netConn.Write([]byte(str))
 		as.NotError(err)
@@ -129,7 +126,8 @@ func Test_conn_serve1(t *testing.T) {
 			},
 			rwc: netConn,
 		}
-		c.server.SetKeepAlivesEnabled(true)
+		defer c.close()
+
 		var index int = 1
 		c.server.Handler = HandlerFunc(func(w ResponseWriter, r *Request) {
 			as.Equal(r.GetNonce(), fmt.Sprintf("%d", index))
@@ -148,6 +146,7 @@ func Test_conn_serve1(t *testing.T) {
 
 			index++
 		})
+		c.server.SetKeepAlivesEnabled(true)
 		c.serve(context.Background())
 	}, func(netConn net.Conn) {
 		b := []byte(str)
@@ -174,7 +173,8 @@ func Test_conn_serve2(t *testing.T) {
 			},
 			rwc: netConn,
 		}
-		c.server.SetKeepAlivesEnabled(true)
+		defer c.close()
+
 		c.server.Handler = HandlerFunc(func(w ResponseWriter, r *Request) {
 			launch := w.(Launcher).Launch()
 			go func(launch RoundTripper, r *Request) {
@@ -183,6 +183,7 @@ func Test_conn_serve2(t *testing.T) {
 				as.NotError(err).Equal(res.Status, 200)
 			}(launch, r)
 		})
+		c.server.SetKeepAlivesEnabled(true)
 		c.serve(context.Background())
 	}, func(netConn net.Conn) {
 		req, err := NewRequest("POST", "iot://a.com/", "123")
@@ -245,7 +246,8 @@ func Test_conn_serve3(t *testing.T) {
 			},
 			rwc: netConn,
 		}
-		c.server.SetKeepAlivesEnabled(true)
+		defer c.close()
+
 		var once sync.Once
 		c.server.Handler = HandlerFunc(func(w ResponseWriter, r *Request) {
 			var first bool
@@ -269,6 +271,7 @@ func Test_conn_serve3(t *testing.T) {
 				w.SetBody("第二响应")
 			}
 		})
+		c.server.SetKeepAlivesEnabled(true)
 		c.serve(context.Background())
 	}, func(netConn net.Conn) {
 		req, err := NewRequest("POST", "iot://a.com/abc", "第一请求")
@@ -306,7 +309,8 @@ func Test_conn_serve4(t *testing.T) {
 			},
 			rwc: netConn,
 		}
-		c.server.SetKeepAlivesEnabled(true)
+		defer c.close()
+
 		var once sync.Once
 		var second bool
 		c.server.Handler = HandlerFunc(func(w ResponseWriter, r *Request) {
@@ -339,6 +343,7 @@ func Test_conn_serve4(t *testing.T) {
 				w.SetBody("第三响应")
 			}
 		})
+		c.server.SetKeepAlivesEnabled(true)
 		c.serve(context.Background())
 	}, func(netConn net.Conn) {
 		req, err := NewRequest("POST", "iot://a.com/abc", "第一请求")

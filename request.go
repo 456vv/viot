@@ -220,7 +220,7 @@ func (T *Request) ProtoAtLeast(major, minor int) bool {
 
 // 应该关闭
 func (T *Request) wantsClose() bool {
-	return hasToken(T.Header.Get("Connection"), "close")
+	return hasToken(T.Header.Get("Connection"), "close") || T.Close
 }
 
 // 读取上下文

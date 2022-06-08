@@ -211,16 +211,16 @@ func readResponse(b io.Reader) (res *Response, err error) {
 	res = new(Response)
 	//{json}
 
-	var riot ResponseConfig
-	err = json.NewDecoder(bufr).Decode(&riot)
+	var rc ResponseConfig
+	err = json.NewDecoder(bufr).Decode(&rc)
 	if err != nil {
 		return nil, fmt.Errorf("read response content error %v", err)
 	}
 
-	if riot.Nonce == "" {
+	if rc.Nonce == "" {
 		return nil, fmt.Errorf("the response nonce serial number is \"\"")
 	}
-	res.Header = riot.Header.Clone()
+	res.Header = rc.Header.Clone()
 	for hk, hv := range res.Header {
 		if !httpguts.ValidHeaderFieldName(hk) {
 			return nil, fmt.Errorf("invalid title name %s", hk)
@@ -229,12 +229,26 @@ func readResponse(b io.Reader) (res *Response, err error) {
 			return nil, fmt.Errorf("invalid header value %s", hv)
 		}
 	}
-	res.nonce = riot.Nonce
-	res.Status = riot.Status
-	res.Body = riot.Body
+	res.nonce = rc.Nonce
+	res.Status = rc.Status
+	res.Body = rc.Body
 	res.Close = shouldClose(1, 1, res.Header)
 
 	return res, nil
+}
+
+// 读取行格式
+func readLineBytes(b io.Reader) ([]byte, error) {
+	r, ok := b.(*bufio.Reader)
+	if !ok {
+		r = newBufioReader(b)
+		defer putBufioReader(r)
+	}
+
+	tp := newTextprotoReader(r)
+	defer putTextprotoReader(tp)
+
+	return tp.ReadLineBytes()
 }
 
 // 应该关闭，判断请求协议是否支持长连接

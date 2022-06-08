@@ -14,6 +14,7 @@ type Client struct {
 	Addr          string           // 服务器地址
 	WriteDeadline time.Duration    // 写入连接超时
 	ReadDeadline  time.Duration    // 读取连接超时
+	Parser        Parser           // 自定义解析接口
 }
 
 // 快速读取
@@ -60,23 +61,8 @@ func (T *Client) Do(req *Request) (resp *Response, err error) {
 //	resp *Response			响应
 //	err error				错误
 func (T *Client) DoCtx(ctx context.Context, req *Request) (resp *Response, err error) {
-	done := make(chan bool)
-	defer func() {
-		if ctx.Err() != nil {
-			err = ctx.Err()
-			return
-		}
-		close(done)
-	}()
-
 	if req.Host == "" {
 		req.Host = T.Host
-	}
-
-	// 转字节串
-	rbody, err := req.Marshal()
-	if err != nil {
-		return nil, err
 	}
 
 	// 创建连接
@@ -91,62 +77,72 @@ func (T *Client) DoCtx(ctx context.Context, req *Request) (resp *Response, err e
 	if T.Dialer == nil {
 		T.Dialer = new(net.Dialer)
 	}
-	netConn, err := T.Dialer.DialContext(ctx, tcpAddr.Network(), tcpAddr.String())
+	conn, err := T.Dialer.DialContext(ctx, tcpAddr.Network(), tcpAddr.String())
 	if err != nil {
 		return nil, err
 	}
 
-	vc, vcOk := netConn.(vconnpool.Conn) // 判断有没有 Discard 接口
-
-	// 客户端不需要这条连接，不回收到池中
-	if req.wantsClose() || req.Close {
-		if vcOk {
+	done := make(chan struct{})
+	defer func() {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		// 判断有没有 Discard 接口
+		// 超时的连接不加入到池，因为服务端依然向该连接写入数据。
+		// 下次使用该连接将会读取到上次的数据
+		if vc, vcOk := conn.(vconnpool.Conn); vcOk && (err != nil || req.wantsClose() || resp.Close) {
 			vc.Discard()
 		}
+		close(done)
+		conn.Close()
+	}()
+
+	if T.Parser == nil {
+		T.Parser = new(defaultParse)
+	}
+
+	// 写入
+	breq, err := T.Parser.Unrequest(req)
+	if err != nil {
+		return nil, err
+	}
+	if d := T.WriteDeadline; d != 0 {
+		if err := conn.SetWriteDeadline(time.Now().Add(d)); err != nil {
+			return nil, err
+		}
+	}
+	if _, err = conn.Write(breq); err != nil {
+		return nil, err
 	}
 
 	// 上下文退出
 	go func() {
-		defer netConn.Close()
 		select {
 		case <-ctx.Done():
-			netConn.SetDeadline(aLongTimeAgo)
-			// 超时的连接不加入到池，因为服务端依然向该连接写入数据。
-			// 下次使用该连接将会读取到上次的数据
-			if vcOk {
-				vc.Discard()
-			}
+			conn.SetDeadline(aLongTimeAgo)
 		case <-done:
 		}
 	}()
 
-	// 写入
-	if T.WriteDeadline != 0 {
-		if err := netConn.SetWriteDeadline(time.Now().Add(T.WriteDeadline)); err != nil {
+	// 读取
+	if d := T.ReadDeadline; d != 0 {
+		if err := conn.SetReadDeadline(time.Now().Add(d)); err != nil {
 			return nil, err
 		}
 	}
-
-	if _, err = netConn.Write(rbody); err != nil {
+	bres, err := readLineBytes(conn)
+	if err != nil {
 		return nil, err
 	}
-
-	// 读取并解析响应
-	if T.ReadDeadline != 0 {
-		if err := netConn.SetReadDeadline(time.Now().Add(T.ReadDeadline)); err != nil {
-			return nil, err
-		}
+	res, err := T.Parser.Response(bres)
+	if err != nil {
+		return nil, err
 	}
-
-	resp, err = ReadResponse(netConn, req)
-	// 服务器已经关闭连接，不回收到池中
-	if err != nil || resp.Close {
-		if vcOk {
-			vc.Discard()
-		}
+	if req.nonce != res.nonce {
+		return nil, ErrRespNonce
 	}
-
-	return
+	res.Request = req
+	return res, nil
 }
 
 // 快速提交

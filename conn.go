@@ -288,9 +288,7 @@ func (T *conn) readLineBytes() (b []byte, err error) {
 	defer T.vc.SetReadLimit(0)
 
 	// 读取行格式
-	tp := newTextprotoReader(T.bufr)
-	defer putTextprotoReader(tp)
-	b, err = tp.ReadLineBytes()
+	b, err = readLineBytes(T.bufr)
 	if err != nil {
 		return nil, err
 	}

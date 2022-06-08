@@ -37,13 +37,12 @@ func Test_Client_1(t *testing.T) {
 			if err != nil {
 				break
 			}
-			resqConfig := ResponseConfig{
-				Nonce:  req.nonce,
-				Status: 200,
+			resq := &Response{
+				Status:  200,
+				Request: req,
 			}
-			req.GetBody(&resqConfig.Body)
-
-			respByte, err := resqConfig.Marshal()
+			req.GetBody(&resq.Body)
+			respByte, err := resq.Marshal()
 			if err != nil {
 				break
 			}
