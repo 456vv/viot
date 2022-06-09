@@ -17,14 +17,14 @@ func (T *defaultParse) Request(b []byte) (*Request, error) {
 	if !isRequest(b) {
 		return nil, ErrReqUnavailable
 	}
-	return readRequest(bytes.NewBuffer(b))
+	return readRequest(bytes.NewReader(b))
 }
 
 func (T *defaultParse) Response(b []byte) (*Response, error) {
 	if !isResponse(b) {
 		return nil, ErrRespUnavailable
 	}
-	return readResponse(bytes.NewBuffer(b))
+	return readResponse(bytes.NewReader(b))
 }
 
 func (T *defaultParse) Unrequest(p *Request) ([]byte, error) {
