@@ -348,14 +348,13 @@ func (T *conn) serve(ctx context.Context) {
 		T.close()
 	}()
 
-	T.server.logf(LogDebug, "viot: 自IP(%s)连接网络", T.remoteAddr)
-
 	// 连接的上下文
 	ctx = context.WithValue(ctx, LocalAddrContextKey, T.rwc.LocalAddr())
 	T.ctx, T.cancelCtx = context.WithCancel(ctx)
 	defer T.cancelCtx()
 
 	T.remoteAddr = T.rwc.RemoteAddr().String()
+	T.server.logf(LogDebug, "viot: 自IP(%s)连接网络", T.remoteAddr)
 
 	if tlsConn, ok := T.rwc.(*tls.Conn); ok {
 		if d := T.server.ReadTimeout; d != 0 {
